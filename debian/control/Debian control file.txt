@@ -1,0 +1,125 @@
+Source: easyinstall
+Section: admin
+Priority: optional
+Maintainer: Sugando Drai <sugandodrai@easyinstall.local>
+Build-Depends: debhelper (>= 10), bash
+Standards-Version: 4.5.0
+Homepage: https://github.com/sugandodrai/easyinstall
+Vcs-Git: https://github.com/sugandodrai/easyinstall.git
+Vcs-Browser: https://github.com/sugandodrai/easyinstall
+
+Package: easyinstall
+Architecture: all
+Depends: ${misc:Depends}, 
+         bash (>= 4.0),
+         curl,
+         wget,
+         gnupg2,
+         ca-certificates,
+         lsb-release,
+         apt-transport-https,
+         software-properties-common,
+         bc,
+         jq,
+         python3-pip,
+         python3-venv,
+         systemd,
+         debconf,
+         ucf
+Recommends: nginx,
+            mariadb-server (>= 10.5),
+            redis-server,
+            memcached,
+            fail2ban,
+            certbot,
+            python3-certbot-nginx,
+            netdata,
+            glances,
+            rclone,
+            postfix,
+            automysqlbackup,
+            htop,
+            neofetch,
+            git,
+            cron,
+            dnsutils,
+            openssl,
+            unzip
+Suggests: php8.3-fpm,
+          php8.3-mysql,
+          php8.3-cli,
+          php8.3-curl,
+          php8.3-xml,
+          php8.3-mbstring,
+          php8.3-zip,
+          php8.3-gd,
+          php8.3-imagick,
+          php8.3-opcache,
+          php8.3-redis,
+          php8.3-intl,
+          php8.3-bcmath,
+          php8.3-gmp,
+          php8.3-xmlrpc,
+          php8.3-memcache,
+          php8.3-memcached,
+          nginx-module-geoip,
+          nginx-module-image-filter,
+          nginx-module-njs,
+          libnginx-mod-http-modsecurity,
+          modsecurity-crs
+Conflicts: webinoly, easyengine, sillystack
+Replaces: easyinstall-legacy
+Provides: easyinstall
+Description: EasyInstall Enterprise Stack v3.0 - Ultra-Optimized 512MB VPS Hosting Engine
+ EasyInstall transforms a low-memory VPS (512MB+) into an enterprise-grade
+ hosting platform with advanced CDN integration, auto-healing, and comprehensive
+ monitoring - all through a single, easy-to-use script.
+ .
+ Key Features:
+  * 🚀 Auto-tuning for low-memory VPS (512MB optimized)
+  * 🌐 Official Nginx with FastCGI cache
+  * ⚡ PHP-FPM with OPcache (auto-detects latest PHP 8.x)
+  * 🔐 MariaDB with performance tuning
+  * 💾 Redis + Memcached object caching
+  * 🛡️ ModSecurity WAF with OWASP rules
+  * 🔒 Enhanced Fail2ban WordPress protection
+  * 🏥 Auto-healing service (monitors & restarts services)
+  * 📊 Netdata + Glances real-time monitoring
+  * 💽 Automated backup system (local + remote)
+  * 🔌 XML-RPC management commands
+  * 🏢 Multi-site panel support
+  * ✏️ Theme/Plugin Editor ENABLED by default
+  * ☁️ CDN integration (Cloudflare)
+  * 🌍 Remote storage (Google Drive, S3, Backblaze, Dropbox)
+  * 🔑 Monthly WordPress security key rotation
+  * 📧 Email alerts and Telegram notifications
+  * 🔧 Comprehensive CLI management commands
+ .
+ EasyInstall is perfect for:
+  * Budget VPS owners (DigitalOcean $4, Hetzner, Vultr)
+  * Freelance web developers
+  * Small WordPress agencies (5-20 sites)
+  * Technical entrepreneurs
+  * Non-profit organizations
+  * DevOps beginners learning server administration
+ .
+ The package includes:
+  * Main installation script (/usr/share/easyinstall/easyinstall.sh)
+  * Package manager (/usr/share/easyinstall/pkg-manager.sh)
+  * Systemd service for auto-healing (/lib/systemd/system/autoheal.service)
+  * Configuration files (/etc/easyinstall/config)
+  * Management commands (/usr/local/bin/easyinstall)
+  * WordPress installer (/usr/local/bin/install-wordpress)
+  * XML-RPC manager (/usr/local/bin/xmlrpc-manager)
+  * Multi-site panel (/usr/local/bin/easy-site)
+  * Backup utilities (/usr/local/bin/easy-{backup,restore})
+  * Monitoring tools (/usr/local/bin/advanced-monitor)
+  * CDN manager (/usr/local/bin/easy-cdn)
+  * Remote storage manager (/usr/local/bin/easy-remote)
+  * Report generator (/usr/local/bin/easy-report)
+  * Alert system (/usr/local/bin/send-alert)
+  * Telegram setup (/usr/local/bin/setup-telegram)
+  * WordPress key updater (/usr/local/bin/update-wp-keys)
+ .
+ After installation, run 'easyinstall help' to see all available commands.
+ Theme/Plugin editor is ENABLED by default for easy WordPress development.
