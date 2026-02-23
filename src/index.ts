@@ -1,82 +1,12 @@
 cat > src/index.ts << 'EOF'
 import { Hono } from 'hono';
+import { EASYINSTALL_SCRIPT } from './script';
 
 const app = new Hono();
 
-// Script content को variable में store करें
-const SCRIPT_CONTENT = `#!/bin/bash
-# EasyInstall v3 - Main Installation Script
-# This script will be fetched and executed by the client
-
-echo "EasyInstall Script Started"
-echo "Fetching package information..."
-
-# Function to detect OS
-detect_os() {
-    case "$(uname -s)" in
-        Linux*)     echo "Linux";;
-        Darwin*)    echo "macOS";;
-        CYGWIN*)    echo "Windows";;
-        MINGW*)     echo "Windows";;
-        *)          echo "Unknown";;
-    esac
-}
-
-# Function to detect package manager
-detect_package_manager() {
-    if command -v apt &> /dev/null; then
-        echo "apt"
-    elif command -v yum &> /dev/null; then
-        echo "yum"
-    elif command -v dnf &> /dev/null; then
-        echo "dnf"
-    elif command -v pacman &> /dev/null; then
-        echo "pacman"
-    elif command -v brew &> /dev/null; then
-        echo "brew"
-    else
-        echo "unknown"
-    fi
-}
-
-# Main installation logic
-main() {
-    echo "OS: $(detect_os)"
-    echo "Package Manager: $(detect_package_manager)"
-    
-    # Get package name from argument or prompt
-    PACKAGE_NAME=${1:-"default-package"}
-    
-    echo "Installing package: $PACKAGE_NAME"
-    
-    # Add your installation logic here
-    case $(detect_package_manager) in
-        apt)
-            sudo apt update && sudo apt install -y "$PACKAGE_NAME"
-            ;;
-        yum|dnf)
-            sudo yum install -y "$PACKAGE_NAME"
-            ;;
-        pacman)
-            sudo pacman -S --noconfirm "$PACKAGE_NAME"
-            ;;
-        brew)
-            brew install "$PACKAGE_NAME"
-            ;;
-        *)
-            echo "No supported package manager found"
-            exit 1
-            ;;
-    esac
-}
-
-# Run main function with all arguments
-main "$@"
-`;
-
-// Route to get the script
+// Serve the bash script
 app.get('/script', (c) => {
-    return new Response(SCRIPT_CONTENT, {
+    return new Response(EASYINSTALL_SCRIPT, {
         headers: {
             'Content-Type': 'text/plain',
             'Content-Disposition': 'attachment; filename="easyinstall.sh"'
@@ -84,9 +14,9 @@ app.get('/script', (c) => {
     });
 });
 
-// Route to get script with line numbers (for viewing)
+// View script with line numbers
 app.get('/script/view', (c) => {
-    const lines = SCRIPT_CONTENT.split('\n');
+    const lines = EASYINSTALL_SCRIPT.split('\n');
     const numberedContent = lines.map((line, index) => 
         `${(index + 1).toString().padStart(4, ' ')} | ${line}`
     ).join('\n');
@@ -96,67 +26,169 @@ app.get('/script/view', (c) => {
     });
 });
 
-// Main route
+// Main webpage
 app.get('/', (c) => {
+    const baseUrl = new URL(c.req.url).origin;
+    
     return c.html(`
         <!DOCTYPE html>
         <html>
         <head>
             <title>EasyInstall Script Server</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1">
             <style>
-                body { font-family: Arial; max-width: 800px; margin: 50px auto; padding: 20px; }
-                pre { background: #f4f4f4; padding: 10px; border-radius: 5px; overflow-x: auto; }
-                button { padding: 10px 20px; background: #0070f3; color: white; border: none; border-radius: 5px; cursor: pointer; }
+                * { box-sizing: border-box; margin: 0; padding: 0; }
+                body { 
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                .container {
+                    background: white;
+                    border-radius: 20px;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                    padding: 40px;
+                    max-width: 800px;
+                    width: 90%;
+                }
+                h1 { 
+                    color: #333;
+                    margin-bottom: 10px;
+                    font-size: 2em;
+                }
+                .subtitle {
+                    color: #666;
+                    margin-bottom: 30px;
+                    border-bottom: 2px solid #f0f0f0;
+                    padding-bottom: 20px;
+                }
+                .url-box {
+                    background: #f5f5f5;
+                    border-radius: 10px;
+                    padding: 15px;
+                    margin: 20px 0;
+                    font-family: monospace;
+                    word-break: break-all;
+                }
+                .command {
+                    background: #1e1e1e;
+                    color: #fff;
+                    border-radius: 10px;
+                    padding: 15px;
+                    margin: 10px 0;
+                    font-family: monospace;
+                    position: relative;
+                }
+                .copy-btn {
+                    position: absolute;
+                    top: 10px;
+                    right: 10px;
+                    background: #4CAF50;
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                    padding: 5px 10px;
+                    cursor: pointer;
+                    font-size: 12px;
+                }
+                .copy-btn:hover {
+                    background: #45a049;
+                }
+                .note {
+                    background: #fff3cd;
+                    border-left: 4px solid #ffc107;
+                    padding: 15px;
+                    margin: 20px 0;
+                    border-radius: 5px;
+                }
+                .button {
+                    display: inline-block;
+                    background: #667eea;
+                    color: white;
+                    text-decoration: none;
+                    padding: 10px 20px;
+                    border-radius: 5px;
+                    margin: 5px;
+                    transition: background 0.3s;
+                }
+                .button:hover {
+                    background: #764ba2;
+                }
             </style>
         </head>
         <body>
-            <h1>EasyInstall Script Server</h1>
-            <p>Your installation script is available at:</p>
-            
-            <h3>Direct Script URL:</h3>
-            <pre>${c.req.url}script</pre>
-            
-            <h3>Download and run:</h3>
-            <pre>curl -s ${c.req.url}script | bash</pre>
-            
-            <h3>Or save and run:</h3>
-            <pre>curl -o easyinstall.sh ${c.req.url}script
-chmod +x easyinstall.sh
-./easyinstall.sh</pre>
-
-            <button onclick="copyCommands()">Copy Commands</button>
-            
-            <h3>View Script Content:</h3>
-            <a href="/script/view" target="_blank">View Full Script</a>
+            <div class="container">
+                <h1>🚀 EasyInstall Script Server</h1>
+                <div class="subtitle">Run installation scripts directly from Cloudflare Workers</div>
+                
+                <div class="url-box">
+                    <strong>Script URL:</strong><br>
+                    ${baseUrl}/script
+                </div>
+                
+                <h3>📥 Download & Run:</h3>
+                
+                <div class="command">
+                    # Run directly (recommended)
+                    curl -s ${baseUrl}/script | bash
+                    <button class="copy-btn" onclick="copyCommand('curl -s ${baseUrl}/script | bash')">Copy</button>
+                </div>
+                
+                <div class="command">
+                    # Download and execute
+                    curl -o easyinstall.sh ${baseUrl}/script
+                    chmod +x easyinstall.sh
+                    ./easyinstall.sh nginx
+                    <button class="copy-btn" onclick="copyCommand('curl -o easyinstall.sh ${baseUrl}/script && chmod +x easyinstall.sh && ./easyinstall.sh')">Copy</button>
+                </div>
+                
+                <div class="command">
+                    # Install specific package
+                    curl -s ${baseUrl}/script | bash -s nodejs
+                    <button class="copy-btn" onclick="copyCommand('curl -s ${baseUrl}/script | bash -s nodejs')">Copy</button>
+                </div>
+                
+                <div class="note">
+                    <strong>⚠️ Note:</strong> The script runs on your local machine, not on Cloudflare. 
+                    Make sure you have sudo access if installing system packages.
+                </div>
+                
+                <div style="text-align: center; margin-top: 30px;">
+                    <a href="/script" class="button" download>📄 Download Script</a>
+                    <a href="/script/view" class="button">👁️ View Script</a>
+                </div>
+            </div>
             
             <script>
-            function copyCommands() {
-                const text = \`# Download and run directly:
-curl -s ${c.req.url}script | bash
-
-# Or save and run:
-curl -o easyinstall.sh ${c.req.url}script
-chmod +x easyinstall.sh
-./easyinstall.sh\`;
-                
-                navigator.clipboard.writeText(text);
-                alert('Commands copied to clipboard!');
-            }
+                function copyCommand(cmd) {
+                    navigator.clipboard.writeText(cmd).then(() => {
+                        alert('Command copied to clipboard!');
+                    });
+                }
             </script>
         </body>
         </html>
     `);
 });
 
-// API endpoint to get script info
-app.get('/api/script-info', (c) => {
+// API endpoint
+app.get('/api/info', (c) => {
+    const baseUrl = new URL(c.req.url).origin;
+    
     return c.json({
-        name: 'easyinstall.sh',
-        version: '3.0',
-        size: SCRIPT_CONTENT.length,
-        lines: SCRIPT_CONTENT.split('\n').length,
-        url: `${c.req.url}script`,
-        downloadCommand: `curl -s ${c.req.url}script | bash`
+        name: 'easyinstall-worker',
+        version: '1.0.0',
+        script_url: `${baseUrl}/script`,
+        script_size: EASYINSTALL_SCRIPT.length,
+        script_lines: EASYINSTALL_SCRIPT.split('\n').length,
+        commands: {
+            direct: `curl -s ${baseUrl}/script | bash`,
+            download: `curl -o easyinstall.sh ${baseUrl}/script`,
+            with_package: `curl -s ${baseUrl}/script | bash -s [package-name]`
+        }
     });
 });
 
