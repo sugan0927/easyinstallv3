@@ -27,7 +27,6 @@ if [ -f "/usr/share/easyinstall/pkg-manager.sh" ]; then
     begin_transaction "full-install"
 fi
 
-# Rest of your original script starts here (keep everything as is)
 # ============================================
 # ✅ FIX: Postfix Non-Interactive Configuration
 # ============================================
@@ -2470,7 +2469,24 @@ show_help() {
     echo -e "${PURPLE}══════════════════════════════════════════════════════${NC}"
 }
 
-case "$1" in
+# Parse main command
+MAIN_COMMAND="$1"
+
+# Handle package manager commands first
+case "$MAIN_COMMAND" in
+    --pkg-update|--pkg-remove|--pkg-status|--pkg-verify)
+        exit 0
+        ;;
+esac
+
+# If no arguments, show help
+if [ -z "$MAIN_COMMAND" ]; then
+    show_help
+    exit 0
+fi
+
+# Handle regular commands
+case "$MAIN_COMMAND" in
     domain)
         if [ -z "$2" ]; then
             echo -e "${RED}Usage: easyinstall domain yourdomain.com [--ssl] [-php=v8.2]${NC}"
@@ -2494,9 +2510,9 @@ case "$1" in
         fi
         
         if [ -z "$PHP_V" ]; then
-            install-wordpress "$DOMAIN" "$ENABLE_SSL"
+            /usr/local/bin/install-wordpress "$DOMAIN" "$ENABLE_SSL"
         else
-            install-wordpress "$DOMAIN" "$ENABLE_SSL" "$PHP_V"
+            /usr/local/bin/install-wordpress "$DOMAIN" "$ENABLE_SSL" "$PHP_V"
         fi
         ;;
         
@@ -2524,7 +2540,7 @@ case "$1" in
         ;;
         
     backup)
-        /usr/local/bin/easy-backup "weekly"
+        /usr/local/bin/easy-backup "${2:-weekly}"
         ;;
         
     restore)
@@ -2578,6 +2594,8 @@ case "$1" in
             rm -rf /var/cache/nginx/*
             systemctl reload nginx 2>/dev/null
             echo -e "${GREEN}✅ Nginx cache cleared${NC}"
+        else
+            echo "Usage: easyinstall cache clear"
         fi
         ;;
         
@@ -2585,6 +2603,8 @@ case "$1" in
         if [ "$2" = "flush" ]; then
             redis-cli FLUSHALL 2>/dev/null
             echo -e "${GREEN}✅ Redis cache flushed${NC}"
+        else
+            echo "Usage: easyinstall redis flush"
         fi
         ;;
         
@@ -2592,18 +2612,24 @@ case "$1" in
         if [ "$2" = "flush" ]; then
             echo "flush_all" | nc localhost 11211 2>/dev/null
             echo -e "${GREEN}✅ Memcached flushed${NC}"
+        else
+            echo "Usage: easyinstall memcached flush"
         fi
         ;;
         
     keys)
         if [ "$2" = "update" ]; then
             /usr/local/bin/update-wp-keys
+        else
+            echo "Usage: easyinstall keys update"
         fi
         ;;
         
     fail2ban)
         if [ "$2" = "status" ]; then
             fail2ban-client status 2>/dev/null
+        else
+            echo "Usage: easyinstall fail2ban status"
         fi
         ;;
         
@@ -2614,6 +2640,8 @@ case "$1" in
             else
                 echo -e "${RED}❌ ModSecurity is disabled${NC}"
             fi
+        else
+            echo "Usage: easyinstall waf status"
         fi
         ;;
         
@@ -2634,8 +2662,8 @@ case "$1" in
             mysql) systemctl restart mariadb 2>/dev/null ;;
             redis) systemctl restart redis-server 2>/dev/null ;;
             memcached) systemctl restart memcached 2>/dev/null ;;
-            all) systemctl restart nginx php*-fpm mariadb redis-server memcached 2>/dev/null ;;
-            *) systemctl restart nginx php*-fpm mariadb redis-server memcached 2>/dev/null ;;
+            all|"") systemctl restart nginx php*-fpm mariadb redis-server memcached 2>/dev/null ;;
+            *) echo "Usage: easyinstall restart [nginx|php|mysql|redis|memcached|all]" ;;
         esac
         echo -e "${GREEN}✅ Services restarted${NC}"
         ;;
@@ -2660,12 +2688,9 @@ case "$1" in
         ;;
         
     *)
-        if [ -z "$1" ]; then
-            show_help
-        else
-            echo -e "${RED}Unknown command: $1${NC}"
-            echo "Run 'easyinstall help' for available commands"
-        fi
+        echo -e "${RED}Unknown command: $MAIN_COMMAND${NC}"
+        echo "Run 'easyinstall help' for available commands"
+        exit 1
         ;;
 esac
 EOF
@@ -2860,36 +2885,15 @@ EOF
 }
 
 # ============================================
-# Main Execution
+# Main Execution - FIXED to handle commands properly
 # ============================================
 main() {
     # Parse command line arguments for package mode
     while [[ $# -gt 0 ]]; do
         case $1 in
-            --pkg-update)
+            --pkg-update|--pkg-remove|--pkg-status|--pkg-verify)
                 if [ "$PKG_MODE" = true ]; then
                     handle_package_command "$@"
-                    exit $?
-                fi
-                shift
-                ;;
-            --pkg-remove)
-                if [ "$PKG_MODE" = true ]; then
-                    handle_package_command "$@"
-                    exit $?
-                fi
-                shift
-                ;;
-            --pkg-status)
-                if [ "$PKG_MODE" = true ]; then
-                    handle_package_command "$@"
-                    exit $?
-                fi
-                shift
-                ;;
-            --pkg-verify)
-                if [ "$PKG_MODE" = true ]; then
-                    verify_installation
                     exit $?
                 fi
                 shift
@@ -2899,34 +2903,70 @@ main() {
                 shift
                 ;;
             *)
+                # If we have arguments that look like commands, don't run full installation
+                if [[ "$1" =~ ^(domain|xmlrpc|ssl|backup|restore|remote|status|report|monitor|telegram|logs|cache|redis|memcached|keys|fail2ban|waf|cdn|site|restart|clean|update|help)$ ]]; then
+                    # Command will be handled by easyinstall script after installation
+                    # We need to ensure easyinstall is installed first
+                    if [ ! -f /usr/local/bin/easyinstall ]; then
+                        echo -e "${YELLOW}EasyInstall not fully installed. Running full installation first...${NC}"
+                        # Run full installation
+                        setup_swap
+                        kernel_tuning
+                        install_packages
+                        setup_modsecurity
+                        setup_autoheal
+                        setup_database
+                        optimize_php
+                        cleanup_nginx_config
+                        configure_nginx
+                        configure_redis_memcached
+                        setup_fail2ban
+                        prepare_wordpress
+                        setup_security_keys_cron
+                        setup_xmlrpc_commands
+                        setup_backups
+                        setup_advanced_monitoring
+                        setup_advanced_cdn
+                        setup_email
+                        setup_panel
+                        setup_remote
+                        install_commands
+                        finalize
+                    fi
+                    # Now execute the command
+                    exec /usr/local/bin/easyinstall "$@"
+                fi
                 shift
                 ;;
         esac
     done
     
-    # Run installation
-    setup_swap
-    kernel_tuning
-    install_packages
-    setup_modsecurity
-    setup_autoheal
-    setup_database
-    optimize_php
-    cleanup_nginx_config
-    configure_nginx
-    configure_redis_memcached
-    setup_fail2ban
-    prepare_wordpress
-    setup_security_keys_cron
-    setup_xmlrpc_commands
-    setup_backups
-    setup_advanced_monitoring
-    setup_advanced_cdn
-    setup_email
-    setup_panel
-    setup_remote
-    install_commands
-    finalize
+    # If no arguments or we reach here, run full installation
+    if [ $# -eq 0 ]; then
+        setup_swap
+        kernel_tuning
+        install_packages
+        setup_modsecurity
+        setup_autoheal
+        setup_database
+        optimize_php
+        cleanup_nginx_config
+        configure_nginx
+        configure_redis_memcached
+        setup_fail2ban
+        prepare_wordpress
+        setup_security_keys_cron
+        setup_xmlrpc_commands
+        setup_backups
+        setup_advanced_monitoring
+        setup_advanced_cdn
+        setup_email
+        setup_panel
+        setup_remote
+        install_commands
+        finalize
+    fi
 }
 
+# Run main function with all arguments
 main "$@"
