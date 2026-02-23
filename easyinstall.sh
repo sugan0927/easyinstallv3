@@ -28,6 +28,374 @@ if [ -f "/usr/share/easyinstall/pkg-manager.sh" ]; then
 fi
 
 # ============================================
+# ✅ Domain Existence Check Function - ADDED
+# ============================================
+check_domain_exists() {
+    local domain=$1
+    
+    # Check for existing nginx config
+    if [ -f "/etc/nginx/sites-available/${domain}" ] || [ -f "/etc/nginx/sites-enabled/${domain}" ]; then
+        return 0
+    fi
+    
+    # Check for WordPress installation
+    if [ -d "/var/www/html/${domain}" ] && [ -f "/var/www/html/${domain}/wp-config.php" ]; then
+        return 0
+    fi
+    
+    # Check for multisite installation
+    if [ -d "/var/www/sites/${domain}" ] && [ -f "/var/www/sites/${domain}/public/wp-config.php" ]; then
+        return 0
+    fi
+    
+    return 1
+}
+
+# ============================================
+# ✅ WordPress Installation Function - ADDED
+# ============================================
+install_wordpress() {
+    local domain=$1
+    local use_ssl=$2
+    local php_version=${3:-$(ls /etc/php/ 2>/dev/null | head -1)}
+    
+    # Check if domain already exists
+    if check_domain_exists "$domain"; then
+        echo -e "${RED}❌ Domain ${domain} already exists. WordPress installation aborted.${NC}"
+        exit 1
+    fi
+    
+    echo -e "${YELLOW}📦 Installing WordPress for ${domain}...${NC}"
+    
+    # Call the existing installer with correct parameters
+    /usr/local/bin/install-wordpress "$domain" "$([ "$use_ssl" = "true" ] && echo "--ssl")" "$php_version"
+}
+
+# ============================================
+# ✅ PHP Site Creation Function - ADDED
+# ============================================
+create_php_site() {
+    local domain=$1
+    local use_ssl=$2
+    
+    # Check if domain already exists
+    if check_domain_exists "$domain"; then
+        echo -e "${RED}❌ Domain ${domain} already exists. PHP site creation aborted.${NC}"
+        exit 1
+    fi
+    
+    echo -e "${YELLOW}🐘 Creating PHP site for ${domain}...${NC}"
+    
+    # Create site directory
+    SITE_DIR="/var/www/html/${domain}"
+    mkdir -p "$SITE_DIR"
+    
+    # Get PHP version
+    PHP_VERSION=$(ls /etc/php/ 2>/dev/null | head -1)
+    [ -z "$PHP_VERSION" ] && PHP_VERSION="8.2"
+    
+    # Create sample index.php
+    cat > "$SITE_DIR/index.php" <<EOF
+<?php
+/**
+ * Sample PHP site for ${domain}
+ */
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${domain}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        h1 {
+            color: #2563eb;
+            margin-bottom: 20px;
+        }
+        .info {
+            background: #f3f4f6;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+        .php-info {
+            color: #059669;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Welcome to <?php echo htmlspecialchars(\$_SERVER['HTTP_HOST']); ?></h1>
+    
+    <div class="info">
+        <p>This is a PHP site created with <strong>EasyInstall</strong></p>
+        <p class="php-info">PHP Version: <?php echo phpversion(); ?></p>
+        <p>Server: <?php echo php_uname('s'); ?></p>
+        <p>Date: <?php echo date('Y-m-d H:i:s'); ?></p>
+    </div>
+    
+    <p>Edit this file at: <code><?php echo __FILE__; ?></code></p>
+</body>
+</html>
+EOF
+
+    # Find PHP socket
+    PHP_SOCKET="unix:/run/php/php${PHP_VERSION}-fpm.sock"
+    if [ ! -S "${PHP_SOCKET#unix:}" ]; then
+        for sock in /run/php/php*-fpm.sock; do
+            if [ -S "$sock" ]; then
+                PHP_SOCKET="unix:$sock"
+                break
+            fi
+        done
+    fi
+
+    # Create nginx config
+    cat > "/etc/nginx/sites-available/${domain}" <<EOF
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${domain} www.${domain};
+    root ${SITE_DIR};
+    index index.php index.html;
+    
+    access_log /var/log/nginx/${domain}_access.log;
+    error_log /var/log/nginx/${domain}_error.log;
+    
+    client_max_body_size 64M;
+    
+    include /etc/nginx/security-headers.conf 2>/dev/null || true;
+    
+    location / {
+        try_files \$uri \$uri/ =404;
+    }
+    
+    location ~ \.php$ {
+        include fastcgi_params;
+        fastcgi_pass ${PHP_SOCKET};
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+    }
+    
+    location ~ /\. {
+        deny all;
+    }
+    
+    location = /favicon.ico {
+        log_not_found off;
+        access_log off;
+    }
+    
+    location = /robots.txt {
+        allow all;
+        log_not_found off;
+        access_log off;
+    }
+}
+EOF
+
+    ln -sf "/etc/nginx/sites-available/${domain}" "/etc/nginx/sites-enabled/"
+    chown -R www-data:www-data "$SITE_DIR"
+    
+    # Test and reload nginx
+    if nginx -t 2>/dev/null; then
+        systemctl reload nginx 2>/dev/null
+        echo -e "${GREEN}✅ Nginx configuration created${NC}"
+    else
+        echo -e "${RED}❌ Nginx configuration test failed${NC}"
+        nginx -t
+        exit 1
+    fi
+    
+    # Enable SSL if requested
+    if [ "$use_ssl" = "true" ]; then
+        echo -e "${YELLOW}🔐 Enabling SSL for ${domain}...${NC}"
+        certbot --nginx -d "$domain" -d "www.$domain" --non-interactive --agree-tos --email "admin@$domain" 2>/dev/null
+        
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✅ SSL enabled for ${domain}${NC}"
+        else
+            echo -e "${RED}❌ SSL installation failed${NC}"
+        fi
+    fi
+    
+    echo -e "${GREEN}✅ PHP site created for ${domain}${NC}"
+    echo -e "${GREEN}🌐 URL: http://${domain}${NC}"
+    [ "$use_ssl" = "true" ] && echo -e "${GREEN}🔒 Secure URL: https://${domain}${NC}"
+}
+
+# ============================================
+# ✅ HTML Site Creation Function - ADDED
+# ============================================
+create_html_site() {
+    local domain=$1
+    local use_ssl=$2
+    
+    # Check if domain already exists
+    if check_domain_exists "$domain"; then
+        echo -e "${RED}❌ Domain ${domain} already exists. HTML site creation aborted.${NC}"
+        exit 1
+    fi
+    
+    echo -e "${YELLOW}🌐 Creating HTML site for ${domain}...${NC}"
+    
+    # Create site directory
+    SITE_DIR="/var/www/html/${domain}"
+    mkdir -p "$SITE_DIR"
+    
+    # Create sample index.html
+    cat > "$SITE_DIR/index.html" <<EOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${domain}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        h1 {
+            color: #2563eb;
+            margin-bottom: 20px;
+        }
+        .info {
+            background: #f3f4f6;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Welcome to ${domain}</h1>
+    
+    <div class="info">
+        <p>This is an HTML site created with <strong>EasyInstall</strong></p>
+        <p>Server: $(hostname)</p>
+        <p>Date: $(date)</p>
+    </div>
+    
+    <p>Edit this file at: <code>${SITE_DIR}/index.html</code></p>
+</body>
+</html>
+EOF
+
+    # Create nginx config for HTML site
+    cat > "/etc/nginx/sites-available/${domain}" <<EOF
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${domain} www.${domain};
+    root ${SITE_DIR};
+    index index.html;
+    
+    access_log /var/log/nginx/${domain}_access.log;
+    error_log /var/log/nginx/${domain}_error.log;
+    
+    client_max_body_size 64M;
+    
+    include /etc/nginx/security-headers.conf 2>/dev/null || true;
+    
+    location / {
+        try_files \$uri \$uri/ =404;
+    }
+    
+    location ~ /\. {
+        deny all;
+    }
+    
+    location = /favicon.ico {
+        log_not_found off;
+        access_log off;
+    }
+    
+    location = /robots.txt {
+        allow all;
+        log_not_found off;
+        access_log off;
+    }
+}
+EOF
+
+    ln -sf "/etc/nginx/sites-available/${domain}" "/etc/nginx/sites-enabled/"
+    chown -R www-data:www-data "$SITE_DIR"
+    
+    # Test and reload nginx
+    if nginx -t 2>/dev/null; then
+        systemctl reload nginx 2>/dev/null
+        echo -e "${GREEN}✅ Nginx configuration created${NC}"
+    else
+        echo -e "${RED}❌ Nginx configuration test failed${NC}"
+        nginx -t
+        exit 1
+    fi
+    
+    # Enable SSL if requested
+    if [ "$use_ssl" = "true" ]; then
+        echo -e "${YELLOW}🔐 Enabling SSL for ${domain}...${NC}"
+        certbot --nginx -d "$domain" -d "www.$domain" --non-interactive --agree-tos --email "admin@$domain" 2>/dev/null
+        
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✅ SSL enabled for ${domain}${NC}"
+        else
+            echo -e "${RED}❌ SSL installation failed${NC}"
+        fi
+    fi
+    
+    echo -e "${GREEN}✅ HTML site created for ${domain}${NC}"
+    echo -e "${GREEN}🌐 URL: http://${domain}${NC}"
+    [ "$use_ssl" = "true" ] && echo -e "${GREEN}🔒 Secure URL: https://${domain}${NC}"
+}
+
+# ============================================
+# ✅ SSL Enable Function for Existing Sites - ADDED
+# ============================================
+enable_ssl_for_site() {
+    local domain=$1
+    
+    # Check if domain exists
+    if [ ! -f "/etc/nginx/sites-available/${domain}" ]; then
+        echo -e "${RED}❌ Domain ${domain} not found.${NC}"
+        exit 1
+    fi
+    
+    echo -e "${YELLOW}🔐 Enabling SSL for ${domain}...${NC}"
+    
+    # Check if SSL already exists
+    if grep -q "listen 443 ssl" "/etc/nginx/sites-available/${domain}" 2>/dev/null; then
+        echo -e "${YELLOW}⚠️ SSL already enabled for ${domain}${NC}"
+        return 0
+    fi
+    
+    # Get SSL certificate
+    certbot --nginx -d "$domain" -d "www.$domain" --non-interactive --agree-tos --email "admin@$domain" 2>/dev/null
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✅ SSL enabled for ${domain}${NC}"
+        echo -e "${GREEN}🔒 Secure URL: https://${domain}${NC}"
+    else
+        echo -e "${RED}❌ Failed to enable SSL for ${domain}${NC}"
+        exit 1
+    fi
+}
+
+# ============================================
 # ✅ FIX: Postfix Non-Interactive Configuration
 # ============================================
 export DEBIAN_FRONTEND=noninteractive
@@ -186,7 +554,7 @@ cleanup_nginx_config() {
     rm -rf /etc/nginx/conf.d/*cache*
     rm -rf /etc/nginx/conf.d/*.bak
     rm -rf /etc/nginx/conf.d/*.old
-    rm -rf //etc/nginx/conf.d/*~
+    rm -rf /etc/nginx/conf.d/*~
     
     # Remove any duplicate or backup files
     find /etc/nginx/conf.d/ -name "fastcgi-cache.conf*" -type f -delete 2>/dev/null || true
@@ -2371,7 +2739,7 @@ EOF
 }
 
 # ============================================
-# Setup Management Commands - FIXED
+# Setup Management Commands - FIXED with new commands
 # ============================================
 install_commands() {
     echo -e "${YELLOW}🔧 Installing management commands...${NC}"
@@ -2391,6 +2759,28 @@ NC='\033[0m'
 
 VERSION="3.0"
 
+# Domain existence check function
+check_domain_exists() {
+    local domain=$1
+    
+    # Check for existing nginx config
+    if [ -f "/etc/nginx/sites-available/${domain}" ] || [ -f "/etc/nginx/sites-enabled/${domain}" ]; then
+        return 0
+    fi
+    
+    # Check for WordPress installation
+    if [ -d "/var/www/html/${domain}" ] && [ -f "/var/www/html/${domain}/wp-config.php" ]; then
+        return 0
+    fi
+    
+    # Check for multisite installation
+    if [ -d "/var/www/sites/${domain}" ] && [ -f "/var/www/sites/${domain}/public/wp-config.php" ]; then
+        return 0
+    fi
+    
+    return 1
+}
+
 get_php_version() {
     if command -v php >/dev/null 2>&1; then
         php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null || echo "8.2"
@@ -2405,67 +2795,86 @@ show_help() {
     echo -e "${PURPLE}══════════════════════════════════════════════════════${NC}"
     echo ""
     
-    echo -e "${CYAN}🌐 DOMAIN & SSL${NC}"
-    echo "  domain <domain>              - Set primary domain and install WordPress"
-    echo "  domain <domain> --ssl         - Install WordPress with SSL"
-    echo "  domain <domain> -php=v8.2     - Set domain with PHP version"
-    echo "  ssl <domain> [email]          - Install SSL for existing domain"
+    echo -e "${CYAN}🌐 WORDPRESS INSTALLATION${NC}"
+    echo "  easyinstall domain example.com              - Install WordPress without SSL"
+    echo "  easyinstall domain example.com --ssl        - Install WordPress with SSL"
+    echo "  easyinstall create example.com              - Install WordPress (multisite style)"
+    echo "  easyinstall create example.com --ssl        - Install WordPress with SSL (multisite style)"
+    echo ""
+    
+    echo -e "${CYAN}🐘 PHP SITE CREATION${NC}"
+    echo "  easyinstall create example.com --php        - Create PHP site without SSL"
+    echo "  easyinstall create example.com --php --ssl  - Create PHP site with SSL"
+    echo ""
+    
+    echo -e "${CYAN}🌐 HTML SITE CREATION${NC}"
+    echo "  easyinstall create example.com --html       - Create HTML site without SSL"
+    echo "  easyinstall create example.com --html --ssl - Create HTML site with SSL"
+    echo ""
+    
+    echo -e "${CYAN}🔒 SSL MANAGEMENT${NC}"
+    echo "  easyinstall site example.com --ssl=on       - Enable SSL for any existing site"
+    echo "  easyinstall site example.com --ssl=off      - Disable SSL for any existing site (coming soon)"
+    echo "  easyinstall ssl example.com [email]          - Legacy SSL installation"
     echo ""
     
     echo -e "${CYAN}🔌 XML-RPC MANAGEMENT${NC}"
-    echo "  xmlrpc enable                 - Enable XML-RPC access"
-    echo "  xmlrpc disable                - Disable/block XML-RPC access"
-    echo "  xmlrpc status                  - Show XML-RPC status"
-    echo "  xmlrpc test [domain]           - Test XML-RPC endpoint"
+    echo "  easyinstall xmlrpc enable                    - Enable XML-RPC access"
+    echo "  easyinstall xmlrpc disable                   - Disable/block XML-RPC access"
+    echo "  easyinstall xmlrpc status                     - Show XML-RPC status"
+    echo "  easyinstall xmlrpc test [domain]              - Test XML-RPC endpoint"
     echo ""
     
     echo -e "${CYAN}💾 BACKUP & RESTORE${NC}"
-    echo "  backup [weekly]              - Create backup (default: weekly)"
-    echo "  restore                       - Restore from backup"
-    echo "  remote add                    - Add external storage (GDrive/S3)"
-    echo "  remote list                   - List configured remotes"
-    echo "  remote status                 - Check remote status"
+    echo "  easyinstall backup [weekly]                  - Create backup (default: weekly)"
+    echo "  easyinstall restore                           - Restore from backup"
+    echo "  easyinstall remote add                        - Add external storage (GDrive/S3)"
+    echo "  easyinstall remote list                       - List configured remotes"
+    echo "  easyinstall remote status                     - Check remote status"
     echo ""
     
     echo -e "${CYAN}📊 MONITORING${NC}"
-    echo "  status                        - System status"
-    echo "  report                        - Advanced performance report"
-    echo "  logs [service]                 - View logs (nginx/php/mysql)"
-    echo "  monitor                        - Run advanced monitor"
-    echo "  telegram                       - Setup Telegram alerts"
+    echo "  easyinstall status                            - System status"
+    echo "  easyinstall report                            - Advanced performance report"
+    echo "  easyinstall logs [service]                    - View logs (nginx/php/mysql)"
+    echo "  easyinstall monitor                            - Run advanced monitor"
+    echo "  easyinstall telegram                           - Setup Telegram alerts"
     echo ""
     
     echo -e "${CYAN}☁️  CDN${NC}"
-    echo "  cdn cloudflare domain key email - Cloudflare setup"
-    echo "  cdn status                      - CDN status report"
-    echo "  cdn purge                        - Purge all CDN caches"
+    echo "  easyinstall cdn cloudflare domain key email   - Cloudflare setup"
+    echo "  easyinstall cdn status                         - CDN status report"
+    echo "  easyinstall cdn purge                          - Purge all CDN caches"
     echo ""
     
     echo -e "${CYAN}🏢 MULTI-SITE${NC}"
-    echo "  site create domain.com         - Create new site (Theme Editor ENABLED)"
-    echo "  site list                       - List all sites"
-    echo "  site delete domain.com          - Delete site"
-    echo "  site enable-ssl domain.com      - Enable SSL for site"
+    echo "  easyinstall site create domain.com            - Create new site (WordPress)"
+    echo "  easyinstall site list                          - List all sites"
+    echo "  easyinstall site delete domain.com             - Delete site"
+    echo "  easyinstall site enable-ssl domain.com         - Enable SSL for site"
     echo ""
     
     echo -e "${CYAN}⚡ PERFORMANCE${NC}"
-    echo "  cache clear                    - Clear FastCGI cache"
-    echo "  redis flush                     - Flush Redis cache"
-    echo "  memcached flush                  - Flush Memcached"
-    echo "  restart [service]               - Restart service"
+    echo "  easyinstall cache clear                        - Clear FastCGI cache"
+    echo "  easyinstall redis flush                         - Flush Redis cache"
+    echo "  easyinstall memcached flush                     - Flush Memcached"
+    echo "  easyinstall restart [service]                   - Restart service"
     echo ""
     
     echo -e "${CYAN}🛡️  SECURITY${NC}"
-    echo "  keys update                     - Update WordPress security keys"
-    echo "  fail2ban status                  - Check Fail2ban status"
-    echo "  waf status                       - Check ModSecurity status"
+    echo "  easyinstall keys update                         - Update WordPress security keys"
+    echo "  easyinstall fail2ban status                     - Check Fail2ban status"
+    echo "  easyinstall waf status                           - Check ModSecurity status"
     echo ""
     
     echo -e "${CYAN}🔧 SYSTEM${NC}"
-    echo "  update                         - Update system"
-    echo "  clean                          - Clean temp files"
-    echo "  help                           - Show this help"
+    echo "  easyinstall update                              - Update system"
+    echo "  easyinstall clean                               - Clean temp files"
+    echo "  easyinstall help                                - Show this help"
     echo ""
+    echo -e "${PURPLE}══════════════════════════════════════════════════════${NC}"
+    echo -e "${YELLOW}⚠️  IMPORTANT: WordPress will ONLY be installed with 'domain' or 'create' commands${NC}"
+    echo -e "${YELLOW}   Domain must be valid and not already exist on this server${NC}"
     echo -e "${PURPLE}══════════════════════════════════════════════════════${NC}"
 }
 
@@ -2487,33 +2896,75 @@ fi
 
 # Handle regular commands
 case "$MAIN_COMMAND" in
-    domain)
+    domain|create)
         if [ -z "$2" ]; then
-            echo -e "${RED}Usage: easyinstall domain yourdomain.com [--ssl] [-php=v8.2]${NC}"
+            echo -e "${RED}Usage: easyinstall $MAIN_COMMAND yourdomain.com [--ssl] [--php|--html]${NC}"
             exit 1
         fi
         DOMAIN=$2
-        ENABLE_SSL=""
-        PHP_V=""
+        USE_SSL="false"
+        SITE_TYPE="wordpress"
         
         shift 2
         for arg in "$@"; do
             case $arg in
-                --ssl) ENABLE_SSL="--ssl" ;;
+                --ssl) USE_SSL="true" ;;
+                --php) SITE_TYPE="php" ;;
+                --html) SITE_TYPE="html" ;;
                 -php=*) PHP_V="${arg#*=}" ;;
             esac
         done
         
-        echo -e "${YELLOW}🌐 Configuring domain: $DOMAIN${NC}"
-        if [ "$ENABLE_SSL" = "--ssl" ]; then
-            echo -e "${YELLOW}🔐 SSL will be enabled after installation${NC}"
+        # Check if domain already exists
+        if check_domain_exists "$DOMAIN"; then
+            echo -e "${RED}❌ Domain ${DOMAIN} already exists. Installation aborted.${NC}"
+            exit 1
         fi
         
-        if [ -z "$PHP_V" ]; then
-            /usr/local/bin/install-wordpress "$DOMAIN" "$ENABLE_SSL"
-        else
-            /usr/local/bin/install-wordpress "$DOMAIN" "$ENABLE_SSL" "$PHP_V"
+        # Execute based on site type
+        case $SITE_TYPE in
+            wordpress)
+                echo -e "${YELLOW}📦 Installing WordPress for $DOMAIN...${NC}"
+                if [ -z "$PHP_V" ]; then
+                    /usr/local/bin/install-wordpress "$DOMAIN" "$([ "$USE_SSL" = "true" ] && echo "--ssl")"
+                else
+                    /usr/local/bin/install-wordpress "$DOMAIN" "$([ "$USE_SSL" = "true" ] && echo "--ssl")" "$PHP_V"
+                fi
+                ;;
+            php)
+                echo -e "${YELLOW}🐘 Creating PHP site for $DOMAIN...${NC}"
+                # Call PHP site creation function (will be handled by main script)
+                /usr/local/bin/easyinstall-internal php-site "$DOMAIN" "$USE_SSL"
+                ;;
+            html)
+                echo -e "${YELLOW}🌐 Creating HTML site for $DOMAIN...${NC}"
+                # Call HTML site creation function (will be handled by main script)
+                /usr/local/bin/easyinstall-internal html-site "$DOMAIN" "$USE_SSL"
+                ;;
+        esac
+        ;;
+        
+    site)
+        if [ -z "$2" ] || [ -z "$3" ]; then
+            echo -e "${RED}Usage: easyinstall site yourdomain.com --ssl=on|off${NC}"
+            exit 1
         fi
+        DOMAIN=$2
+        SSL_ACTION=$3
+        
+        case $SSL_ACTION in
+            --ssl=on)
+                # Call SSL enable function
+                /usr/local/bin/easyinstall-internal enable-ssl "$DOMAIN"
+                ;;
+            --ssl=off)
+                echo -e "${RED}SSL disable not implemented yet${NC}"
+                ;;
+            *)
+                echo -e "${RED}Invalid option: $SSL_ACTION${NC}"
+                exit 1
+                ;;
+        esac
         ;;
         
     xmlrpc)
@@ -2650,7 +3101,7 @@ case "$MAIN_COMMAND" in
         /usr/local/bin/easy-cdn "$@"
         ;;
         
-    site)
+    site-manager)
         shift
         /usr/local/bin/easy-site "$@"
         ;;
@@ -2696,6 +3147,324 @@ esac
 EOF
 
     chmod +x /usr/local/bin/easyinstall
+    
+    # Create internal command handler for PHP/HTML site creation and SSL enable
+    cat > /usr/local/bin/easyinstall-internal <<'EOF'
+#!/bin/bash
+
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+COMMAND=$1
+DOMAIN=$2
+USE_SSL=$3
+
+case $COMMAND in
+    php-site)
+        echo -e "${YELLOW}🐘 Creating PHP site for $DOMAIN...${NC}"
+        
+        # Create site directory
+        SITE_DIR="/var/www/html/${DOMAIN}"
+        mkdir -p "$SITE_DIR"
+        
+        # Get PHP version
+        PHP_VERSION=$(ls /etc/php/ 2>/dev/null | head -1)
+        [ -z "$PHP_VERSION" ] && PHP_VERSION="8.2"
+        
+        # Create sample index.php
+        cat > "$SITE_DIR/index.php" <<PHPEOF
+<?php
+/**
+ * Sample PHP site for ${DOMAIN}
+ */
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${DOMAIN}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        h1 {
+            color: #2563eb;
+            margin-bottom: 20px;
+        }
+        .info {
+            background: #f3f4f6;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+        .php-info {
+            color: #059669;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Welcome to <?php echo htmlspecialchars(\$_SERVER['HTTP_HOST']); ?></h1>
+    
+    <div class="info">
+        <p>This is a PHP site created with <strong>EasyInstall</strong></p>
+        <p class="php-info">PHP Version: <?php echo phpversion(); ?></p>
+        <p>Server: <?php echo php_uname('s'); ?></p>
+        <p>Date: <?php echo date('Y-m-d H:i:s'); ?></p>
+    </div>
+    
+    <p>Edit this file at: <code><?php echo __FILE__; ?></code></p>
+</body>
+</html>
+PHPEOF
+
+        # Find PHP socket
+        PHP_SOCKET="unix:/run/php/php${PHP_VERSION}-fpm.sock"
+        if [ ! -S "${PHP_SOCKET#unix:}" ]; then
+            for sock in /run/php/php*-fpm.sock; do
+                if [ -S "$sock" ]; then
+                    PHP_SOCKET="unix:$sock"
+                    break
+                fi
+            done
+        fi
+
+        # Create nginx config
+        cat > "/etc/nginx/sites-available/${DOMAIN}" <<NGINXEOF
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN} www.${DOMAIN};
+    root ${SITE_DIR};
+    index index.php index.html;
+    
+    access_log /var/log/nginx/${DOMAIN}_access.log;
+    error_log /var/log/nginx/${DOMAIN}_error.log;
+    
+    client_max_body_size 64M;
+    
+    include /etc/nginx/security-headers.conf 2>/dev/null || true;
+    
+    location / {
+        try_files \$uri \$uri/ =404;
+    }
+    
+    location ~ \.php$ {
+        include fastcgi_params;
+        fastcgi_pass ${PHP_SOCKET};
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+    }
+    
+    location ~ /\. {
+        deny all;
+    }
+    
+    location = /favicon.ico {
+        log_not_found off;
+        access_log off;
+    }
+    
+    location = /robots.txt {
+        allow all;
+        log_not_found off;
+        access_log off;
+    }
+}
+NGINXEOF
+
+        ln -sf "/etc/nginx/sites-available/${DOMAIN}" "/etc/nginx/sites-enabled/"
+        chown -R www-data:www-data "$SITE_DIR"
+        
+        # Test and reload nginx
+        if nginx -t 2>/dev/null; then
+            systemctl reload nginx 2>/dev/null
+            echo -e "${GREEN}✅ Nginx configuration created${NC}"
+        else
+            echo -e "${RED}❌ Nginx configuration test failed${NC}"
+            nginx -t
+            exit 1
+        fi
+        
+        # Enable SSL if requested
+        if [ "$USE_SSL" = "true" ]; then
+            echo -e "${YELLOW}🔐 Enabling SSL for ${DOMAIN}...${NC}"
+            certbot --nginx -d "$DOMAIN" -d "www.$DOMAIN" --non-interactive --agree-tos --email "admin@$DOMAIN" 2>/dev/null
+            
+            if [ $? -eq 0 ]; then
+                echo -e "${GREEN}✅ SSL enabled for ${DOMAIN}${NC}"
+            else
+                echo -e "${RED}❌ SSL installation failed${NC}"
+            fi
+        fi
+        
+        echo -e "${GREEN}✅ PHP site created for ${DOMAIN}${NC}"
+        echo -e "${GREEN}🌐 URL: http://${DOMAIN}${NC}"
+        [ "$USE_SSL" = "true" ] && echo -e "${GREEN}🔒 Secure URL: https://${DOMAIN}${NC}"
+        ;;
+        
+    html-site)
+        echo -e "${YELLOW}🌐 Creating HTML site for $DOMAIN...${NC}"
+        
+        # Create site directory
+        SITE_DIR="/var/www/html/${DOMAIN}"
+        mkdir -p "$SITE_DIR"
+        
+        # Create sample index.html
+        cat > "$SITE_DIR/index.html" <<HTMLEOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${DOMAIN}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        h1 {
+            color: #2563eb;
+            margin-bottom: 20px;
+        }
+        .info {
+            background: #f3f4f6;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Welcome to ${DOMAIN}</h1>
+    
+    <div class="info">
+        <p>This is an HTML site created with <strong>EasyInstall</strong></p>
+        <p>Server: $(hostname)</p>
+        <p>Date: $(date)</p>
+    </div>
+    
+    <p>Edit this file at: <code>${SITE_DIR}/index.html</code></p>
+</body>
+</html>
+HTMLEOF
+
+        # Create nginx config for HTML site
+        cat > "/etc/nginx/sites-available/${DOMAIN}" <<NGINXEOF
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN} www.${DOMAIN};
+    root ${SITE_DIR};
+    index index.html;
+    
+    access_log /var/log/nginx/${DOMAIN}_access.log;
+    error_log /var/log/nginx/${DOMAIN}_error.log;
+    
+    client_max_body_size 64M;
+    
+    include /etc/nginx/security-headers.conf 2>/dev/null || true;
+    
+    location / {
+        try_files \$uri \$uri/ =404;
+    }
+    
+    location ~ /\. {
+        deny all;
+    }
+    
+    location = /favicon.ico {
+        log_not_found off;
+        access_log off;
+    }
+    
+    location = /robots.txt {
+        allow all;
+        log_not_found off;
+        access_log off;
+    }
+}
+NGINXEOF
+
+        ln -sf "/etc/nginx/sites-available/${DOMAIN}" "/etc/nginx/sites-enabled/"
+        chown -R www-data:www-data "$SITE_DIR"
+        
+        # Test and reload nginx
+        if nginx -t 2>/dev/null; then
+            systemctl reload nginx 2>/dev/null
+            echo -e "${GREEN}✅ Nginx configuration created${NC}"
+        else
+            echo -e "${RED}❌ Nginx configuration test failed${NC}"
+            nginx -t
+            exit 1
+        fi
+        
+        # Enable SSL if requested
+        if [ "$USE_SSL" = "true" ]; then
+            echo -e "${YELLOW}🔐 Enabling SSL for ${DOMAIN}...${NC}"
+            certbot --nginx -d "$DOMAIN" -d "www.$DOMAIN" --non-interactive --agree-tos --email "admin@$DOMAIN" 2>/dev/null
+            
+            if [ $? -eq 0 ]; then
+                echo -e "${GREEN}✅ SSL enabled for ${DOMAIN}${NC}"
+            else
+                echo -e "${RED}❌ SSL installation failed${NC}"
+            fi
+        fi
+        
+        echo -e "${GREEN}✅ HTML site created for ${DOMAIN}${NC}"
+        echo -e "${GREEN}🌐 URL: http://${DOMAIN}${NC}"
+        [ "$USE_SSL" = "true" ] && echo -e "${GREEN}🔒 Secure URL: https://${DOMAIN}${NC}"
+        ;;
+        
+    enable-ssl)
+        echo -e "${YELLOW}🔐 Enabling SSL for $DOMAIN...${NC}"
+        
+        # Check if domain exists
+        if [ ! -f "/etc/nginx/sites-available/${DOMAIN}" ]; then
+            echo -e "${RED}❌ Domain ${DOMAIN} not found.${NC}"
+            exit 1
+        fi
+        
+        # Check if SSL already exists
+        if grep -q "listen 443 ssl" "/etc/nginx/sites-available/${DOMAIN}" 2>/dev/null; then
+            echo -e "${YELLOW}⚠️ SSL already enabled for ${DOMAIN}${NC}"
+            exit 0
+        fi
+        
+        # Get SSL certificate
+        certbot --nginx -d "$DOMAIN" -d "www.$DOMAIN" --non-interactive --agree-tos --email "admin@$DOMAIN" 2>/dev/null
+        
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✅ SSL enabled for ${DOMAIN}${NC}"
+            echo -e "${GREEN}🔒 Secure URL: https://${DOMAIN}${NC}"
+        else
+            echo -e "${RED}❌ Failed to enable SSL for ${DOMAIN}${NC}"
+            exit 1
+        fi
+        ;;
+        
+    *)
+        echo -e "${RED}Unknown internal command${NC}"
+        exit 1
+        ;;
+esac
+EOF
+
+    chmod +x /usr/local/bin/easyinstall-internal
     
     echo "alias e='easyinstall'" >> /root/.bashrc
     echo "alias eb='easyinstall backup'" >> /root/.bashrc
@@ -2763,6 +3532,14 @@ WORDPRESS:
              Just enable in WordPress Settings > Permalinks
   Theme/Plugin Editor: ENABLED (DISALLOW_FILE_EDIT = false)
 
+PHP & HTML SITES:
+  PHP Site: easyinstall create example.com --php [--ssl]
+  HTML Site: easyinstall create example.com --html [--ssl]
+
+SSL MANAGEMENT:
+  Enable SSL: easyinstall site example.com --ssl=on
+  Legacy SSL: easyinstall ssl example.com [email]
+
 XML-RPC MANAGEMENT:
   Commands: easyinstall xmlrpc enable|disable|status|test
   Default: XML-RPC is ENABLED
@@ -2796,14 +3573,23 @@ PERFORMANCE:
 MAIN COMMANDS:
   easyinstall domain example.com        # Install WordPress for domain
   easyinstall domain example.com --ssl  # Install WordPress with SSL
-  easyinstall ssl example.com           # Enable SSL for existing domain
+  easyinstall create example.com        # Install WordPress (alternative)
+  easyinstall create example.com --ssl  # Install WordPress with SSL (alternative)
+  easyinstall create example.com --php  # Create PHP site
+  easyinstall create example.com --html # Create HTML site
+  easyinstall site example.com --ssl=on # Enable SSL for any site
+  easyinstall ssl example.com           # Legacy SSL installation
   easyinstall xmlrpc disable             # Block XML-RPC for security
   easyinstall xmlrpc enable              # Re-enable XML-RPC
   easyinstall xmlrpc status               # Check XML-RPC status
   easyinstall status                    # System status
   easyinstall report                    # Performance report
   easyinstall backup weekly             # Create backup
-  easyinstall site create example.com   # Create additional site (Editor ENABLED)
+  easyinstall site create example.com   # Create additional WordPress site (Editor ENABLED)
+
+⚠️ IMPORTANT:
+  • WordPress will ONLY be installed with 'domain' or 'create' commands
+  • Domain must be valid and not already exist on this server
 
 DATABASE ROOT CREDENTIALS:
   Username: root
@@ -2837,6 +3623,17 @@ EOF
     echo "   Note: Nginx supports pretty permalinks - enable in WordPress Settings"
     echo "   Theme/Plugin Editor: ENABLED (You can edit themes/plugins from admin)"
     echo ""
+    echo "🐘 PHP Sites:"
+    echo "   Create: easyinstall create example.com --php"
+    echo "   With SSL: easyinstall create example.com --php --ssl"
+    echo ""
+    echo "🌐 HTML Sites:"
+    echo "   Create: easyinstall create example.com --html"
+    echo "   With SSL: easyinstall create example.com --html --ssl"
+    echo ""
+    echo "🔒 SSL Management:"
+    echo "   Enable SSL for any site: easyinstall site example.com --ssl=on"
+    echo ""
     echo "🔌 XML-RPC Management:"
     echo "   Default: XML-RPC is ENABLED"
     echo "   To disable (recommended for security): easyinstall xmlrpc disable"
@@ -2860,6 +3657,10 @@ EOF
     echo ""
     echo "🏥 Auto-healing: Enabled (monitors all services)"
     echo ""
+    echo "⚠️ IMPORTANT:"
+    echo "   • WordPress will ONLY be installed with 'domain' or 'create' commands"
+    echo "   • Domain must be valid and not already exist on this server"
+    echo ""
     echo "📦 Package Manager: Installed (use 'dpkg -r easyinstall' to remove)"
     echo ""
     echo "🔧 Available commands:"
@@ -2867,10 +3668,15 @@ EOF
     echo "   easyinstall status"
     echo "   easyinstall domain example.com"
     echo "   easyinstall domain example.com --ssl"
-    echo "   easyinstall ssl example.com"
+    echo "   easyinstall create example.com"
+    echo "   easyinstall create example.com --ssl"
+    echo "   easyinstall create example.com --php"
+    echo "   easyinstall create example.com --php --ssl"
+    echo "   easyinstall create example.com --html"
+    echo "   easyinstall create example.com --html --ssl"
+    echo "   easyinstall site example.com --ssl=on"
     echo "   easyinstall xmlrpc disable"
     echo "   easyinstall xmlrpc status"
-    echo "   easyinstall site create example.com"
     echo ""
     echo -e "${GREEN}════════════════════════════════════════════════${NC}"
     echo -e "${YELLOW}☕ Support: https://paypal.me/sugandodrai${NC}"
@@ -2904,7 +3710,7 @@ main() {
                 ;;
             *)
                 # If we have arguments that look like commands, don't run full installation
-                if [[ "$1" =~ ^(domain|xmlrpc|ssl|backup|restore|remote|status|report|monitor|telegram|logs|cache|redis|memcached|keys|fail2ban|waf|cdn|site|restart|clean|update|help)$ ]]; then
+                if [[ "$1" =~ ^(domain|create|site|xmlrpc|ssl|backup|restore|remote|status|report|monitor|telegram|logs|cache|redis|memcached|keys|fail2ban|waf|cdn|site-manager|restart|clean|update|help)$ ]]; then
                     # Command will be handled by easyinstall script after installation
                     # We need to ensure easyinstall is installed first
                     if [ ! -f /usr/local/bin/easyinstall ]; then
