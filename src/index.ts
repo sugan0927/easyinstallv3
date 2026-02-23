@@ -1,9 +1,10 @@
-// src/index.ts - COMPLETELY FIXED VERSION
-// DO NOT use destructured import - use namespace import
+cat > src/index.ts << 'EOF'
+// src/index.ts - CORRECT VERSION
+// IMPORTANT: Use default import, NOT destructured
 
 import { Hono } from 'hono';
 import { serve } from 'std/http/server.ts';
-// IMPORTANT: Use namespace import, NOT destructured
+// ✅ CORRECT - Default import
 import ssh2 from 'ssh2';
 
 // Type definitions
@@ -21,15 +22,13 @@ interface Deployment {
   logs: string[];
 }
 
-// In-memory storage (will use Deno KV in production)
+// In-memory storage
 const deployments = new Map<string, Deployment>();
 
 // Create Hono app
 const app = new Hono();
 
-// ============================================
 // Serve HTML UI
-// ============================================
 app.get('/', (c) => {
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -333,9 +332,7 @@ app.get('/', (c) => {
   return c.html(html);
 });
 
-// ============================================
 // API: Start Deployment
-// ============================================
 app.post('/api/deploy', async (c) => {
   try {
     const { domain, serverIp, sshPort, sshUser, sshKey, template } = await c.req.json();
@@ -374,9 +371,7 @@ app.post('/api/deploy', async (c) => {
   }
 });
 
-// ============================================
 // API: Get Status
-// ============================================
 app.get('/api/status', (c) => {
   const deploymentId = c.req.query('id');
   
@@ -399,9 +394,7 @@ app.get('/api/status', (c) => {
   });
 });
 
-// ============================================
 // API: Get All Deployments
-// ============================================
 app.get('/api/deployments', (c) => {
   const deploymentList = Array.from(deployments.values())
     .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
@@ -410,9 +403,7 @@ app.get('/api/deployments', (c) => {
   return c.json({ deployments: deploymentList });
 });
 
-// ============================================
 // Execute SSH Deployment - FIXED
-// ============================================
 async function executeDeployment(
   deploymentId: string,
   domain: string,
@@ -437,7 +428,7 @@ async function executeDeployment(
     
     log('🔌 Establishing SSH connection...');
     
-    // FIX: Use default import and access Client property
+    // ✅ CORRECT: Use default import
     const Client = ssh2.Client;
     const client = new Client();
     
@@ -445,20 +436,7 @@ async function executeDeployment(
       client.on('ready', () => {
         log('✅ SSH connection established');
         
-        // Build command based on template
-        const easyinstallUrl = 'https://raw.githubusercontent.com/yourusername/easyinstall/main/easyinstall.sh';
-        let command = '';
-        
-        switch (template) {
-          case 'ssl':
-            command = `curl -sSL ${easyinstallUrl} | bash && easyinstall domain ${domain} --ssl`;
-            break;
-          case 'multisite':
-            command = `curl -sSL ${easyinstallUrl} | bash && easyinstall panel`;
-            break;
-          default:
-            command = `curl -sSL ${easyinstallUrl} | bash && easyinstall domain ${domain}`;
-        }
+        const command = `curl -sSL https://raw.githubusercontent.com/yourusername/easyinstall/main/easyinstall.sh | bash && easyinstall domain ${domain} ${template === 'ssl' ? '--ssl' : ''}`;
         
         log(`📦 Executing: ${command}`);
         
@@ -519,9 +497,8 @@ async function executeDeployment(
   }
 }
 
-// ============================================
 // Start server
-// ============================================
 serve(app.fetch, { port: 8000 });
 
 console.log('🚀 EasyInstall server running on http://localhost:8000');
+EOF
