@@ -1,7 +1,8 @@
-// src/index.ts - For Deno Deploy (Fixed)
+// src/index.ts - Complete working version for Deno
 
-import { Hono } from 'https://deno.land/x/hono@v3.11.11/mod.ts';
-import { Client } from 'npm:ssh2@^0.8.9';
+import { Hono } from 'hono';
+import { serve } from 'std/http/server.ts';
+import * as ssh2 from 'ssh2';
 
 // Type definitions
 interface Deployment {
@@ -18,20 +19,22 @@ interface Deployment {
   logs: string[];
 }
 
-// In-memory storage (use Deno KV for persistence in production)
+// In-memory storage (use Deno KV for persistence)
 const deployments = new Map<string, Deployment>();
 
 // Create Hono app
 const app = new Hono();
 
+// ============================================
 // Serve HTML UI
+// ============================================
 app.get('/', (c) => {
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EasyInstall Deployer</title>
+    <title>EasyInstall Deno Deployer</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -197,7 +200,9 @@ app.get('/', (c) => {
         
         <div class="card">
             <h2>📊 Recent Deployments</h2>
-            <div id="recentDeployments" class="deployments-list"></div>
+            <div id="recentDeployments" class="deployments-list">
+                <p style="color: #ccc;">Loading...</p>
+            </div>
         </div>
     </div>
     
@@ -304,7 +309,7 @@ app.get('/', (c) => {
                     container.innerHTML = data.deployments.map(d => \`
                         <div class="deployment-item">
                             <strong>\${d.domain}</strong> - 
-                            <span class="badge" style="background: \${d.status === 'completed' ? '#00ff0022' : d.status === 'failed' ? '#ff000022' : '#ffff0022'}; padding: 3px 8px; border-radius: 12px;">\${d.status}</span>
+                            <span class="badge" style="background: \${d.status === 'completed' ? '#00ff0022' : d.status === 'failed' ? '#ff000022' : '#ffff0022'}; color: \${d.status === 'completed' ? '#00ff00' : d.status === 'failed' ? '#ff6b6b' : '#ffff00'}; padding: 3px 8px; border-radius: 12px;">\${d.status}</span>
                             <br>
                             <small>Started: \${new Date(d.startTime).toLocaleString()}</small>
                         </div>
@@ -326,7 +331,9 @@ app.get('/', (c) => {
   return c.html(html);
 });
 
+// ============================================
 // API: Start Deployment
+// ============================================
 app.post('/api/deploy', async (c) => {
   try {
     const { domain, serverIp, sshPort, sshUser, sshKey, template } = await c.req.json();
@@ -365,7 +372,9 @@ app.post('/api/deploy', async (c) => {
   }
 });
 
+// ============================================
 // API: Get Status
+// ============================================
 app.get('/api/status', (c) => {
   const deploymentId = c.req.query('id');
   
@@ -388,7 +397,9 @@ app.get('/api/status', (c) => {
   });
 });
 
+// ============================================
 // API: Get All Deployments
+// ============================================
 app.get('/api/deployments', (c) => {
   const deploymentList = Array.from(deployments.values())
     .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
@@ -397,7 +408,9 @@ app.get('/api/deployments', (c) => {
   return c.json({ deployments: deploymentList });
 });
 
+// ============================================
 // Execute SSH Deployment
+// ============================================
 async function executeDeployment(
   deploymentId: string,
   domain: string,
@@ -422,23 +435,38 @@ async function executeDeployment(
     
     log('🔌 Establishing SSH connection...');
     
+    // Create SSH client - Fix: use proper import
+    const Client = ssh2.Client;
     const client = new Client();
     
     await new Promise((resolve, reject) => {
       client.on('ready', () => {
         log('✅ SSH connection established');
         
-        const command = `curl -sSL https://raw.githubusercontent.com/yourusername/easyinstall/main/easyinstall.sh | bash && easyinstall domain ${domain} ${template === 'ssl' ? '--ssl' : ''}`;
+        // Build command based on template
+        const easyinstallUrl = 'https://raw.githubusercontent.com/yourusername/easyinstall/main/easyinstall.sh';
+        let command = '';
+        
+        switch (template) {
+          case 'ssl':
+            command = `curl -sSL ${easyinstallUrl} | bash && easyinstall domain ${domain} --ssl`;
+            break;
+          case 'multisite':
+            command = `curl -sSL ${easyinstallUrl} | bash && easyinstall panel`;
+            break;
+          default:
+            command = `curl -sSL ${easyinstallUrl} | bash && easyinstall domain ${domain}`;
+        }
         
         log(`📦 Executing: ${command}`);
         
-        client.exec(command, (err, stream) => {
+        client.exec(command, (err: Error | undefined, stream: any) => {
           if (err) {
             reject(err);
             return;
           }
           
-          stream.on('close', (code) => {
+          stream.on('close', (code: number) => {
             log(`✅ Process finished with code ${code}`);
             client.end();
             
@@ -461,7 +489,7 @@ async function executeDeployment(
         });
       });
       
-      client.on('error', (err) => {
+      client.on('error', (err: Error) => {
         log(`❌ SSH Error: ${err.message}`);
         reject(err);
       });
@@ -488,7 +516,9 @@ async function executeDeployment(
   }
 }
 
+// ============================================
 // Start server
-Deno.serve(app.fetch, { port: 8000 });
+// ============================================
+serve(app.fetch, { port: 8000 });
 
 console.log('🚀 EasyInstall server running on http://localhost:8000');
