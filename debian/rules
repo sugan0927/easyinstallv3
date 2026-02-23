@@ -1,0 +1,13 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_install:
+	# Install systemd service files
+	install -D -m 644 autoheal.service debian/easyinstall/lib/systemd/system/autoheal.service
+	install -D -m 644 glances.service debian/easyinstall/lib/systemd/system/glances.service
+	
+	# Install hook scripts
+	install -D -m 755 enable-theme-editor.sh debian/easyinstall/usr/share/easyinstall/hooks/enable-theme-editor.sh
+	install -D -m 755 post-install.sh debian/easyinstall/usr/share/easyinstall/hooks/post-install.sh
