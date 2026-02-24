@@ -441,6 +441,7 @@ fi
 TOTAL_RAM=$(free -m | awk '/Mem:/ {print $2}')
 TOTAL_CORES=$(nproc)
 IP_ADDRESS=$(hostname -I | awk '{print $1}' | head -1)
+OS_ID=$(grep ^ID= /etc/os-release | cut -d= -f2 | tr -d '"')
 OS_VERSION=$(lsb_release -sc 2>/dev/null || echo "focal")
 HOSTNAME_FQDN=$(hostname -f 2>/dev/null || hostname)
 
@@ -448,7 +449,7 @@ echo -e "${YELLOW}📊 System Information:${NC}"
 echo "   • RAM: ${TOTAL_RAM}MB"
 echo "   • CPU Cores: ${TOTAL_CORES}"
 echo "   • IP Address: ${IP_ADDRESS}"
-echo "   • OS: Ubuntu/Debian ${OS_VERSION}"
+echo "   • OS: ${OS_ID^} ${OS_VERSION}"
 echo "   • Hostname: ${HOSTNAME_FQDN}"
 echo ""
 
@@ -593,28 +594,62 @@ install_packages() {
     # Add PHP repository
     echo -e "${YELLOW}   📌 Adding PHP repository (ondrej/php)...${NC}"
     
-    if ! add-apt-repository -y ppa:ondrej/php 2>/dev/null; then
+    # Check if running on Debian
+    if [ "$OS_ID" = "debian" ]; then
+        echo -e "${YELLOW}   📌 Detected Debian OS, using sury.org PHP repository...${NC}"
         wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg 2>/dev/null || \
         curl -fsSL https://packages.sury.org/php/apt.gpg | gpg --dearmor -o /etc/apt/trusted.gpg.d/php.gpg
-        echo "deb https://packages.sury.org/php/ $(lsb_release -sc 2>/dev/null || echo 'focal') main" > /etc/apt/sources.list.d/php.list
+        echo "deb https://packages.sury.org/php/ $(lsb_release -sc 2>/dev/null || echo 'bookworm') main" > /etc/apt/sources.list.d/php.list
+    else
+        # Ubuntu - use ondrej/php PPA
+        if ! add-apt-repository -y ppa:ondrej/php 2>/dev/null; then
+            wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg 2>/dev/null || \
+            curl -fsSL https://packages.sury.org/php/apt.gpg | gpg --dearmor -o /etc/apt/trusted.gpg.d/php.gpg
+            echo "deb https://packages.sury.org/php/ $(lsb_release -sc 2>/dev/null || echo 'focal') main" > /etc/apt/sources.list.d/php.list
+        fi
     fi
     
-    # Add official Nginx repository
+    # Add official Nginx repository with OS detection
     echo -e "${YELLOW}   📌 Adding official Nginx repository...${NC}"
     rm -f /etc/apt/sources.list.d/nginx.list
     
     # Add Nginx signing key
     curl -fsSL https://nginx.org/keys/nginx_signing.key | gpg --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg 2>/dev/null
     
-    # Add Nginx repository for mainline version
-    echo "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] http://nginx.org/packages/mainline/ubuntu $(lsb_release -sc 2>/dev/null || echo 'focal') nginx" > /etc/apt/sources.list.d/nginx.list
-    
-    # Pin Nginx packages
-    cat > /etc/apt/preferences.d/nginx <<EOF
+    # OS-specific repository configuration
+    if [ "$OS_ID" = "debian" ]; then
+        # Debian-specific repository setup
+        echo -e "${YELLOW}   📌 Detected Debian OS, using Debian repository...${NC}"
+        
+        # Get Debian version codename
+        DEBIAN_CODENAME=$(lsb_release -sc 2>/dev/null || echo "bookworm")
+        
+        # Add Debian repository
+        echo "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] http://nginx.org/packages/mainline/debian ${DEBIAN_CODENAME} nginx" > /etc/apt/sources.list.d/nginx.list
+        
+        # Pin Nginx packages
+        cat > /etc/apt/preferences.d/nginx <<EOF
 Package: nginx*
 Pin: origin nginx.org
 Pin-Priority: 900
 EOF
+    else
+        # Ubuntu-specific repository setup
+        echo -e "${YELLOW}   📌 Detected Ubuntu OS, using Ubuntu repository...${NC}"
+        
+        # Get Ubuntu version codename
+        UBUNTU_CODENAME=$(lsb_release -sc 2>/dev/null || echo 'focal')
+        
+        # Add Nginx repository for mainline version
+        echo "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] http://nginx.org/packages/mainline/ubuntu ${UBUNTU_CODENAME} nginx" > /etc/apt/sources.list.d/nginx.list
+        
+        # Pin Nginx packages
+        cat > /etc/apt/preferences.d/nginx <<EOF
+Package: nginx*
+Pin: origin nginx.org
+Pin-Priority: 900
+EOF
+    fi
     
     apt update
     
@@ -3520,7 +3555,7 @@ SYSTEM INFORMATION:
   IP Address: ${IP_ADDRESS}
   RAM: ${TOTAL_RAM}MB
   Cores: ${TOTAL_CORES}
-  OS: Ubuntu/Debian ${OS_VERSION}
+  OS: ${OS_ID^} ${OS_VERSION}
 
 MONITORING INTERFACES:
   Netdata: http://${IP_ADDRESS}:19999
