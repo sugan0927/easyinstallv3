@@ -22,7 +22,13 @@ fi
 
 # Install base EasyInstall
 echo -e "${YELLOW}📦 Installing base EasyInstall...${NC}"
-curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/easyinstall/main/easyinstall(6).sh -o /tmp/easyinstall.sh
+
+# Fix: Use proper URL encoding for filename with parentheses
+curl -fsSL "https://raw.githubusercontent.com/sugan0927/easyinstall-worker./main/easyinstall%286%29.sh" -o /tmp/easyinstall.sh
+
+# Alternative: If you rename the file, use this instead
+# curl -fsSL https://raw.githubusercontent.com/sugan0927/easyinstall-worker./main/easyinstall.sh -o /tmp/easyinstall.sh
+
 bash /tmp/easyinstall.sh
 rm /tmp/easyinstall.sh
 
@@ -33,112 +39,172 @@ mkdir -p /usr/share/easyinstall/integrations
 echo -e "${YELLOW}🔌 Downloading integrations...${NC}"
 
 INTEGRATIONS=("docker" "kubernetes" "podman" "microvm")
-BASE_URL="https://raw.githubusercontent.com/YOUR_USERNAME/easyinstall/main/integrations"
+BASE_URL="https://raw.githubusercontent.com/sugan0927/easyinstall-worker./main/integrations"
 
 for integration in "${INTEGRATIONS[@]}"; do
     echo -e "   Downloading $integration integration..."
-    curl -fsSL "$BASE_URL/$integration.sh" -o "/usr/share/easyinstall/integrations/$integration.sh"
-    chmod +x "/usr/share/easyinstall/integrations/$integration.sh"
+    if curl -fsSL "$BASE_URL/$integration.sh" -o "/usr/share/easyinstall/integrations/$integration.sh"; then
+        chmod +x "/usr/share/easyinstall/integrations/$integration.sh"
+        echo -e "   ${GREEN}✅ Downloaded $integration${NC}"
+    else
+        echo -e "   ${YELLOW}⚠️ Could not download $integration (continuing anyway)${NC}"
+    fi
 done
 
+# Create base command if it doesn't exist
+if [ ! -f /usr/local/bin/easyinstall-base ]; then
+    ln -sf /usr/local/bin/easyinstall /usr/local/bin/easyinstall-base 2>/dev/null || true
+fi
+
 # Create wrapper script
-cat > /usr/local/bin/easyinstall <<'EOF'
+cat > /usr/local/bin/easyinstall-wrapper <<'EOF'
 #!/bin/bash
 
 # EasyInstall Wrapper with Integrations
 
-BASE_CMD="/usr/local/bin/easyinstall-base"
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+BASE_CMD="/usr/local/bin/easyinstall"
 INTEGRATIONS_DIR="/usr/share/easyinstall/integrations"
 
 # Source integrations if available
-for integration in "$INTEGRATIONS_DIR"/*.sh; do
-    if [ -f "$integration" ]; then
-        source "$integration"
-    fi
-done
+if [ -d "$INTEGRATIONS_DIR" ]; then
+    for integration in "$INTEGRATIONS_DIR"/*.sh; do
+        if [ -f "$integration" ]; then
+            source "$integration"
+        fi
+    done
+fi
+
+# Function to show integration help
+show_integration_help() {
+    echo -e "${GREEN}EasyInstall Enterprise Stack with Integrations${NC}"
+    echo ""
+    echo -e "${YELLOW}Available commands:${NC}"
+    echo ""
+    echo "  Core Commands:"
+    echo "    easyinstall domain example.com        - Install WordPress"
+    echo "    easyinstall status                    - Check system status"
+    echo "    easyinstall help                       - Show all core commands"
+    echo ""
+    echo "  Integration Commands:"
+    echo "    easyinstall docker help                - Docker integration"
+    echo "    easyinstall k8s help                   - Kubernetes integration"
+    echo "    easyinstall podman help                - Podman integration"
+    echo "    easyinstall microvm help               - MicroVM integration"
+    echo ""
+}
 
 # Handle integration commands
 case "$1" in
     docker)
-        shift
-        docker_command "$@"
+        if [ -z "$2" ] || [ "$2" = "help" ]; then
+            if type docker_command &>/dev/null; then
+                docker_command
+            else
+                echo -e "${RED}Docker integration not available${NC}"
+            fi
+        else
+            shift
+            if type docker_command &>/dev/null; then
+                docker_command "$@"
+            else
+                echo -e "${RED}Docker integration not available${NC}"
+            fi
+        fi
         ;;
     k8s|kubernetes)
-        shift
-        k8s_command "$@"
+        if [ -z "$2" ] || [ "$2" = "help" ]; then
+            if type k8s_command &>/dev/null; then
+                k8s_command
+            else
+                echo -e "${RED}Kubernetes integration not available${NC}"
+            fi
+        else
+            shift
+            if type k8s_command &>/dev/null; then
+                k8s_command "$@"
+            else
+                echo -e "${RED}Kubernetes integration not available${NC}"
+            fi
+        fi
         ;;
     podman)
-        shift
-        podman_command "$@"
+        if [ -z "$2" ] || [ "$2" = "help" ]; then
+            if type podman_command &>/dev/null; then
+                podman_command
+            else
+                echo -e "${RED}Podman integration not available${NC}"
+            fi
+        else
+            shift
+            if type podman_command &>/dev/null; then
+                podman_command "$@"
+            else
+                echo -e "${RED}Podman integration not available${NC}"
+            fi
+        fi
         ;;
     microvm)
-        shift
-        microvm_command "$@"
+        if [ -z "$2" ] || [ "$2" = "help" ]; then
+            if type microvm_command &>/dev/null; then
+                microvm_command
+            else
+                echo -e "${RED}MicroVM integration not available${NC}"
+            fi
+        else
+            shift
+            if type microvm_command &>/dev/null; then
+                microvm_command "$@"
+            else
+                echo -e "${RED}MicroVM integration not available${NC}"
+            fi
+        fi
+        ;;
+    help|--help|-h)
+        show_integration_help
         ;;
     *)
         # Pass through to base command
-        exec "$BASE_CMD" "$@"
+        if [ -f "$BASE_CMD" ]; then
+            exec "$BASE_CMD" "$@"
+        else
+            echo -e "${RED}Base EasyInstall command not found${NC}"
+            exit 1
+        fi
         ;;
 esac
 EOF
 
-chmod +x /usr/local/bin/easyinstall
+chmod +x /usr/local/bin/easyinstall-wrapper
 
-# Create base command symlink
-ln -sf /usr/local/bin/easyinstall-base /usr/local/bin/easyinstall-base 2>/dev/null || true
+# Replace the original easyinstall with wrapper
+mv /usr/local/bin/easyinstall-wrapper /usr/local/bin/easyinstall 2>/dev/null || \
+cp /usr/local/bin/easyinstall-wrapper /usr/local/bin/easyinstall
+
+# Clean up
+rm -f /usr/local/bin/easyinstall-wrapper 2>/dev/null || true
 
 echo -e "${GREEN}"
 echo "============================================"
 echo "✅ Installation Complete with Integrations!"
 echo "============================================"
 echo ""
-echo "Available integrations:"
+echo -e "${YELLOW}Available integrations:${NC}"
 echo "  docker    - Docker Compose support"
 echo "  k8s       - Kubernetes support"
 echo "  podman    - Podman/Containerd support"
 echo "  microvm   - Firecracker/Youki isolation"
 echo ""
-echo "Usage examples:"
-echo "  easyinstall docker create example.com wordpress"
-echo "  easyinstall k8s deploy example.com"
-echo "  easyinstall podman create example.com"
-echo "  easyinstall microvm create-firecracker example.com"
+echo -e "${YELLOW}Usage examples:${NC}"
+echo "  easyinstall domain example.com              # WordPress"
+echo "  easyinstall docker create example.com       # Docker"
+echo "  easyinstall k8s deploy example.com          # Kubernetes"
+echo "  easyinstall podman create example.com       # Podman"
+echo "  easyinstall microvm create-firecracker example.com  # MicroVM"
 echo ""
+echo -e "${GREEN}Run 'easyinstall help' for all core commands${NC}"
 echo -e "${NC}"
-# install.sh - EasyInstall Package Installer
-
-echo "🚀 EasyInstall Package Installer"
-echo "================================"
-
-# Check if running as root
-if [ "$EUID" -ne 0 ]; then 
-    echo "❌ Please run as root"
-    exit 1
-fi
-
-# Build the package
-echo "📦 Building package..."
-bash build-pkg.sh
-
-# Install the package
-echo "📦 Installing package..."
-dpkg -i easyinstall_3.0_all.deb
-
-# Fix dependencies
-echo "📦 Fixing dependencies..."
-apt-get install -f -y
-
-# Run the installer
-echo "🚀 Running EasyInstall..."
-easyinstall
-
-echo ""
-echo "✅ Installation complete!"
-echo ""
-echo "Quick commands:"
-echo "  easyinstall status              - Check system status"
-echo "  easyinstall domain example.com  - Install WordPress"
-echo "  easyinstall help                 - Show all commands"
-echo "  easyinstall --pkg-status         - Check package status"
-echo ""
-echo "Theme/Plugin Editor: ENABLED by default"
