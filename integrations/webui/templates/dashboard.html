@@ -1,0 +1,1835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>EasyInstall - Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-color: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary-color: #10b981;
+            --danger-color: #ef4444;
+            --warning-color: #f59e0b;
+            --dark-bg: #0f172a;
+            --light-bg: #f8fafc;
+            --card-bg: #ffffff;
+            --sidebar-bg: #1e293b;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --text-light: #94a3b8;
+            --border-color: #e2e8f0;
+            --success-color: #22c55e;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: var(--light-bg);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 1.5rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.95);
+        }
+
+        .header-content {
+            max-width: 1600px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .logo h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text-primary);
+        }
+
+        .user-menu {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+
+        .user-details {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .user-name {
+            font-weight: 600;
+        }
+
+        .user-role {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .logout-btn {
+            padding: 0.5rem 1rem;
+            background: none;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .logout-btn:hover {
+            background: var(--danger-color);
+            color: white;
+            border-color: var(--danger-color);
+        }
+
+        /* Main Layout */
+        .main-container {
+            display: flex;
+            flex: 1;
+            max-width: 1600px;
+            margin: 0 auto;
+            width: 100%;
+            padding: 1.5rem;
+            gap: 1.5rem;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: var(--sidebar-bg);
+            border-radius: 16px;
+            padding: 1.5rem;
+            height: fit-content;
+            position: sticky;
+            top: 90px;
+            transition: all 0.3s;
+        }
+
+        .sidebar-menu {
+            list-style: none;
+        }
+
+        .sidebar-menu li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar-menu a {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.875rem 1rem;
+            color: var(--text-light);
+            text-decoration: none;
+            border-radius: 12px;
+            transition: all 0.3s;
+        }
+
+        .sidebar-menu a:hover,
+        .sidebar-menu a.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .sidebar-menu a i {
+            width: 20px;
+            text-align: center;
+        }
+
+        /* Content */
+        .content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+        }
+
+        .stat-title {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-change {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .stat-change.positive {
+            color: var(--success-color);
+        }
+
+        .stat-change.negative {
+            color: var(--danger-color);
+        }
+
+        /* Section */
+        .section {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .btn {
+            padding: 0.625rem 1.25rem;
+            border-radius: 8px;
+            border: none;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-outline {
+            background: none;
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .btn-outline:hover {
+            background: var(--light-bg);
+        }
+
+        /* Tables */
+        .table-responsive {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            text-align: left;
+            padding: 0.75rem 1rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 0.875rem;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        td {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .status-badge.success {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status-badge.warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-badge.danger {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        /* Cards */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .domain-card {
+            background: var(--light-bg);
+            border-radius: 12px;
+            padding: 1.25rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .domain-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 1rem;
+        }
+
+        .domain-name {
+            font-weight: 600;
+            font-size: 1.125rem;
+        }
+
+        .domain-type {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            background: var(--border-color);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+        }
+
+        .domain-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .domain-actions button {
+            padding: 0.375rem 0.75rem;
+            font-size: 0.875rem;
+        }
+
+        /* Forms */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--card-bg);
+            border-radius: 24px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            font-size: 0.875rem;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .main-container {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                position: static;
+            }
+
+            .sidebar-menu {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+
+            .sidebar-menu li {
+                margin-bottom: 0;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .menu-toggle {
+                display: block;
+            }
+
+            .user-details {
+                display: none;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .section-header {
+                flex-direction: column;
+                gap: 1rem;
+                align-items: start;
+            }
+
+            .cards-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .modal-content {
+                padding: 1.5rem;
+            }
+        }
+
+        /* Loading */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border-color);
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Notifications */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            background: white;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            z-index: 2000;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .notification.success {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .notification.error {
+            background: var(--danger-color);
+            color: white;
+        }
+
+        .notification.warning {
+            background: var(--warning-color);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+                <h1>EasyInstall</h1>
+            </div>
+            <div class="user-menu">
+                <div class="user-info">
+                    <div class="user-avatar" id="userAvatar">A</div>
+                    <div class="user-details">
+                        <span class="user-name" id="userName">Admin</span>
+                        <span class="user-role" id="userRole">Administrator</span>
+                    </div>
+                </div>
+                <button class="logout-btn" onclick="logout()">Logout</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <aside class="sidebar" id="sidebar">
+            <ul class="sidebar-menu">
+                <li><a href="#" onclick="showSection('dashboard')" class="active" id="menu-dashboard">
+                    <i>📊</i> Dashboard
+                </a></li>
+                <li><a href="#" onclick="showSection('domains')" id="menu-domains">
+                    <i>🌐</i> Domains
+                </a></li>
+                <li><a href="#" onclick="showSection('docker')" id="menu-docker">
+                    <i>🐳</i> Docker
+                </a></li>
+                <li><a href="#" onclick="showSection('backups')" id="menu-backups">
+                    <i>💾</i> Backups
+                </a></li>
+                <li><a href="#" onclick="showSection('cloud')" id="menu-cloud">
+                    <i>☁️</i> Cloud Storage
+                </a></li>
+                <li><a href="#" onclick="showSection('services')" id="menu-services">
+                    <i>⚙️</i> Services
+                </a></li>
+                <li><a href="#" onclick="showSection('users')" id="menu-users">
+                    <i>👥</i> Users
+                </a></li>
+                <li><a href="#" onclick="showSection('settings')" id="menu-settings">
+                    <i>🔧</i> Settings
+                </a></li>
+                <li><a href="#" onclick="showSection('logs')" id="menu-logs">
+                    <i>📋</i> Logs
+                </a></li>
+            </ul>
+        </aside>
+
+        <main class="content">
+            <!-- Dashboard Section -->
+            <div id="section-dashboard" class="section active">
+                <div class="section-header">
+                    <h2 class="section-title">Dashboard</h2>
+                    <div>
+                        <span class="status-badge success" id="liveStatus">● Live</span>
+                    </div>
+                </div>
+
+                <div class="stats-grid" id="statsGrid">
+                    <div class="stat-card">
+                        <div class="stat-title">CPU Load</div>
+                        <div class="stat-value" id="cpuLoad">0%</div>
+                        <div class="stat-change" id="cpuChange">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Memory Usage</div>
+                        <div class="stat-value" id="memoryUsage">0%</div>
+                        <div class="stat-change" id="memoryChange">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Disk Usage</div>
+                        <div class="stat-value" id="diskUsage">0%</div>
+                        <div class="stat-change" id="diskChange">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Active Domains</div>
+                        <div class="stat-value" id="domainCount">0</div>
+                        <div class="stat-change" id="domainChange">-</div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="section-header">
+                        <h3 class="section-title">Quick Actions</h3>
+                    </div>
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                        <button class="btn btn-primary" onclick="showModal('createDomainModal')">
+                            ➕ New Domain
+                        </button>
+                        <button class="btn btn-primary" onclick="createBackup()">
+                            💾 Backup Now
+                        </button>
+                        <button class="btn btn-outline" onclick="refreshStatus()">
+                            🔄 Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="section-header">
+                        <h3 class="section-title">Recent Activity</h3>
+                    </div>
+                    <div class="table-responsive">
+                        <table id="activityTable">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Event</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="activityBody">
+                                <tr>
+                                    <td colspan="3" style="text-align: center;">Loading...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Domains Section -->
+            <div id="section-domains" class="section" style="display: none;">
+                <div class="section-header">
+                    <h2 class="section-title">Domains</h2>
+                    <button class="btn btn-primary" onclick="showModal('createDomainModal')">
+                        + Add Domain
+                    </button>
+                </div>
+
+                <div class="cards-grid" id="domainsGrid">
+                    <!-- Domains will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Docker Section -->
+            <div id="section-docker" class="section" style="display: none;">
+                <div class="section-header">
+                    <h2 class="section-title">Docker WordPress</h2>
+                    <button class="btn btn-primary" onclick="showModal('dockerModal')">
+                        + New Docker Site
+                    </button>
+                </div>
+
+                <div class="cards-grid" id="dockerGrid">
+                    <!-- Docker installations will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Backups Section -->
+            <div id="section-backups" class="section" style="display: none;">
+                <div class="section-header">
+                    <h2 class="section-title">Backups</h2>
+                    <div>
+                        <button class="btn btn-primary" onclick="createBackup()">
+                            Backup Now
+                        </button>
+                        <button class="btn btn-outline" onclick="showModal('backupJobModal')">
+                            Schedule Backup
+                        </button>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3 class="section-title">Backup Jobs</h3>
+                    <div class="table-responsive">
+                        <table id="backupJobsTable">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Schedule</th>
+                                    <th>Last Run</th>
+                                    <th>Next Run</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="backupJobsBody">
+                                <tr>
+                                    <td colspan="6" style="text-align: center;">Loading...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3 class="section-title">Backup History</h3>
+                    <div class="table-responsive">
+                        <table id="backupHistoryTable">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Size</th>
+                                    <th>Location</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="backupHistoryBody">
+                                <tr>
+                                    <td colspan="4" style="text-align: center;">Loading...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cloud Storage Section -->
+            <div id="section-cloud" class="section" style="display: none;">
+                <div class="section-header">
+                    <h2 class="section-title">Cloud Storage</h2>
+                </div>
+
+                <div class="cards-grid" id="cloudGrid">
+                    <div class="domain-card">
+                        <div class="domain-header">
+                            <span class="domain-name">Amazon S3</span>
+                            <span class="domain-type" id="s3Status">Not Configured</span>
+                        </div>
+                        <p>Store backups in AWS S3 buckets</p>
+                        <div class="domain-actions">
+                            <button class="btn btn-primary" onclick="configureCloud('s3')">
+                                Configure
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="domain-card">
+                        <div class="domain-header">
+                            <span class="domain-name">Google Drive</span>
+                            <span class="domain-type" id="gdriveStatus">Not Configured</span>
+                        </div>
+                        <p>Store backups in Google Drive</p>
+                        <div class="domain-actions">
+                            <button class="btn btn-primary" onclick="configureCloud('gdrive')">
+                                Configure
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="domain-card">
+                        <div class="domain-header">
+                            <span class="domain-name">Rclone</span>
+                            <span class="domain-type" id="rcloneStatus">Not Configured</span>
+                        </div>
+                        <p>Connect to any cloud storage via rclone</p>
+                        <div class="domain-actions">
+                            <button class="btn btn-primary" onclick="configureCloud('rclone')">
+                                Configure
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3 class="section-title">Cloud Backups</h3>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Provider</th>
+                                    <th>File</th>
+                                    <th>Size</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cloudBackupsBody">
+                                <tr>
+                                    <td colspan="5" style="text-align: center;">No cloud backups yet</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Services Section -->
+            <div id="section-services" class="section" style="display: none;">
+                <div class="section-header">
+                    <h2 class="section-title">Services</h2>
+                </div>
+
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Service</th>
+                                <th>Status</th>
+                                <th>Uptime</th>
+                                <th>Memory</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="servicesBody">
+                            <tr>
+                                <td colspan="5" style="text-align: center;">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Users Section -->
+            <div id="section-users" class="section" style="display: none;">
+                <div class="section-header">
+                    <h2 class="section-title">Users</h2>
+                    <button class="btn btn-primary" onclick="showModal('userModal')">
+                        + Add User
+                    </button>
+                </div>
+
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Created</th>
+                                <th>Last Login</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersBody">
+                            <tr>
+                                <td colspan="6" style="text-align: center;">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Settings Section -->
+            <div id="section-settings" class="section" style="display: none;">
+                <div class="section-header">
+                    <h2 class="section-title">Settings</h2>
+                </div>
+
+                <div class="form-group">
+                    <label>Backup Retention (days)</label>
+                    <input type="number" id="backupRetention" value="30">
+                </div>
+
+                <div class="form-group">
+                    <label>Auto Backup Schedule</label>
+                    <select id="backupSchedule">
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Default PHP Version</label>
+                    <select id="defaultPhp">
+                        <option value="8.2">PHP 8.2</option>
+                        <option value="8.1">PHP 8.1</option>
+                        <option value="8.0">PHP 8.0</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Theme/Plugin Editor</label>
+                    <select id="themeEditor">
+                        <option value="enabled">Enabled</option>
+                        <option value="disabled">Disabled</option>
+                    </select>
+                </div>
+
+                <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+            </div>
+
+            <!-- Logs Section -->
+            <div id="section-logs" class="section" style="display: none;">
+                <div class="section-header">
+                    <h2 class="section-title">System Logs</h2>
+                    <div>
+                        <select id="logType" onchange="loadLogs()">
+                            <option value="webui">WebUI</option>
+                            <option value="nginx">Nginx</option>
+                            <option value="php">PHP</option>
+                            <option value="mysql">MySQL</option>
+                            <option value="backup">Backup</option>
+                        </select>
+                        <button class="btn btn-outline" onclick="loadLogs()">Refresh</button>
+                    </div>
+                </div>
+
+                <pre id="logContent" style="background: var(--dark-bg); color: white; padding: 1rem; border-radius: 8px; overflow-x: auto; max-height: 600px;">Loading logs...</pre>
+            </div>
+        </main>
+    </div>
+
+    <!-- Create Domain Modal -->
+    <div id="createDomainModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Add New Domain</h3>
+                <button class="close-btn" onclick="hideModal('createDomainModal')">&times;</button>
+            </div>
+            <form onsubmit="createDomain(event)">
+                <div class="form-group">
+                    <label>Domain Name</label>
+                    <input type="text" id="domainName" placeholder="example.com" required>
+                </div>
+                <div class="form-group">
+                    <label>Site Type</label>
+                    <select id="siteType">
+                        <option value="wordpress">WordPress</option>
+                        <option value="php">PHP Site</option>
+                        <option value="html">HTML Site</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>PHP Version</label>
+                    <select id="phpVersion">
+                        <option value="8.2">PHP 8.2</option>
+                        <option value="8.1">PHP 8.1</option>
+                        <option value="8.0">PHP 8.0</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="enableSSL"> Enable SSL (Let's Encrypt)
+                    </label>
+                </div>
+                <button type="submit" class="btn btn-primary">Create Domain</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Docker Modal -->
+    <div id="dockerModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Create Docker WordPress</h3>
+                <button class="close-btn" onclick="hideModal('dockerModal')">&times;</button>
+            </div>
+            <form onsubmit="createDockerSite(event)">
+                <div class="form-group">
+                    <label>Domain Name</label>
+                    <input type="text" id="dockerDomain" placeholder="example.com" required>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="dockerSSL"> Enable SSL
+                    </label>
+                </div>
+                <button type="submit" class="btn btn-primary">Create Docker Site</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Backup Job Modal -->
+    <div id="backupJobModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Schedule Backup</h3>
+                <button class="close-btn" onclick="hideModal('backupJobModal')">&times;</button>
+            </div>
+            <form onsubmit="createBackupJob(event)">
+                <div class="form-group">
+                    <label>Job Name</label>
+                    <input type="text" id="jobName" placeholder="Daily Backup" required>
+                </div>
+                <div class="form-group">
+                    <label>Schedule</label>
+                    <select id="jobSchedule">
+                        <option value="0 2 * * *">Daily at 2 AM</option>
+                        <option value="0 2 * * 0">Weekly on Sunday</option>
+                        <option value="0 2 1 * *">Monthly on 1st</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Retention (days)</label>
+                    <input type="number" id="jobRetention" value="30">
+                </div>
+                <div class="form-group">
+                    <label>Cloud Destination</label>
+                    <select id="jobDestination">
+                        <option value="local">Local Only</option>
+                        <option value="s3">Amazon S3</option>
+                        <option value="gdrive">Google Drive</option>
+                        <option value="rclone">Rclone Remote</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Create Job</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Cloud Config Modal -->
+    <div id="cloudConfigModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" id="cloudModalTitle">Configure Cloud</h3>
+                <button class="close-btn" onclick="hideModal('cloudConfigModal')">&times;</button>
+            </div>
+            <div id="cloudConfigForm"></div>
+        </div>
+    </div>
+
+    <!-- User Modal -->
+    <div id="userModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Add User</h3>
+                <button class="close-btn" onclick="hideModal('userModal')">&times;</button>
+            </div>
+            <form onsubmit="createUser(event)">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="newUsername" required>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="newEmail">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="newPassword" required>
+                </div>
+                <div class="form-group">
+                    <label>Role</label>
+                    <select id="newRole">
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Create User</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // WebSocket connection
+        const socket = io();
+        let currentUser = { username: 'Admin', role: 'admin' };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDashboard();
+            setupWebSocket();
+            startStatusUpdates();
+        });
+
+        // WebSocket setup
+        function setupWebSocket() {
+            socket.on('connect', function() {
+                console.log('Connected to server');
+                socket.emit('subscribe_status');
+            });
+
+            socket.on('status_update', function(data) {
+                updateStats(data);
+            });
+
+            socket.on('docker_install_complete', function(data) {
+                if (data.success) {
+                    showNotification(`Docker WordPress installed for ${data.domain}`, 'success');
+                    loadDockerSites();
+                } else {
+                    showNotification(`Installation failed: ${data.output}`, 'error');
+                }
+            });
+        }
+
+        // Navigation
+        function showSection(section) {
+            // Hide all sections
+            document.querySelectorAll('.content > .section').forEach(el => {
+                el.style.display = 'none';
+            });
+            
+            // Show selected section
+            document.getElementById(`section-${section}`).style.display = 'block';
+            
+            // Update active menu
+            document.querySelectorAll('.sidebar-menu a').forEach(el => {
+                el.classList.remove('active');
+            });
+            document.getElementById(`menu-${section}`).classList.add('active');
+            
+            // Load section data
+            switch(section) {
+                case 'domains': loadDomains(); break;
+                case 'docker': loadDockerSites(); break;
+                case 'backups': loadBackups(); break;
+                case 'cloud': loadCloudStatus(); break;
+                case 'services': loadServices(); break;
+                case 'users': loadUsers(); break;
+                case 'logs': loadLogs(); break;
+            }
+        }
+
+        // Dashboard
+        function startStatusUpdates() {
+            setInterval(loadDashboard, 10000);
+        }
+
+        function loadDashboard() {
+            fetch('/api/status')
+                .then(res => res.json())
+                .then(data => {
+                    updateStats(data);
+                    updateDomainsList(data.domains);
+                    updateActivity(data);
+                })
+                .catch(err => console.error('Failed to load dashboard:', err));
+        }
+
+        function updateStats(data) {
+            if (data.resources) {
+                if (data.resources.cpu) {
+                    document.getElementById('cpuLoad').textContent = data.resources.cpu + '%';
+                }
+                if (data.resources.memory) {
+                    const total = data.resources.memory.MemTotal / 1024;
+                    const free = data.resources.memory.MemFree / 1024;
+                    const used = total - free;
+                    const percent = (used / total * 100).toFixed(1);
+                    document.getElementById('memoryUsage').textContent = percent + '%';
+                }
+                if (data.resources.disk) {
+                    document.getElementById('diskUsage').textContent = data.resources.disk.use_percent;
+                }
+            }
+            
+            if (data.domains) {
+                document.getElementById('domainCount').textContent = data.domains.length;
+            }
+        }
+
+        // Domains
+        function loadDomains() {
+            fetch('/api/domains')
+                .then(res => res.json())
+                .then(domains => {
+                    const grid = document.getElementById('domainsGrid');
+                    if (domains.length === 0) {
+                        grid.innerHTML = '<p>No domains yet. Click "Add Domain" to create one.</p>';
+                        return;
+                    }
+                    
+                    grid.innerHTML = domains.map(domain => `
+                        <div class="domain-card">
+                            <div class="domain-header">
+                                <span class="domain-name">${domain.domain}</span>
+                                <span class="domain-type">${domain.type}</span>
+                            </div>
+                            <p>PHP: ${domain.php_version || '8.2'}</p>
+                            <p>SSL: ${domain.ssl ? '✅ Enabled' : '❌ Disabled'}</p>
+                            <p>Created: ${new Date(domain.created).toLocaleDateString()}</p>
+                            <div class="domain-actions">
+                                ${!domain.ssl ? `<button class="btn btn-primary" onclick="enableSSL('${domain.domain}')">Enable SSL</button>` : ''}
+                                <button class="btn btn-outline" onclick="deleteDomain('${domain.domain}')">Delete</button>
+                            </div>
+                        </div>
+                    `).join('');
+                });
+        }
+
+        function createDomain(event) {
+            event.preventDefault();
+            
+            const data = {
+                domain: document.getElementById('domainName').value,
+                type: document.getElementById('siteType').value,
+                php_version: document.getElementById('phpVersion').value,
+                ssl: document.getElementById('enableSSL').checked
+            };
+            
+            fetch('/api/domains', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    showNotification('Domain created successfully', 'success');
+                    hideModal('createDomainModal');
+                    loadDomains();
+                    loadDashboard();
+                } else {
+                    showNotification(result.error || 'Failed to create domain', 'error');
+                }
+            })
+            .catch(err => {
+                showNotification('Error creating domain', 'error');
+            });
+        }
+
+        function enableSSL(domain) {
+            fetch(`/api/domains/${domain}/ssl`, {
+                method: 'POST'
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    showNotification(`SSL enabled for ${domain}`, 'success');
+                    loadDomains();
+                } else {
+                    showNotification(result.error || 'Failed to enable SSL', 'error');
+                }
+            });
+        }
+
+        function deleteDomain(domain) {
+            if (!confirm(`Are you sure you want to delete ${domain}?`)) return;
+            
+            fetch(`/api/domains/${domain}`, {
+                method: 'DELETE'
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    showNotification(`Domain ${domain} deleted`, 'success');
+                    loadDomains();
+                    loadDashboard();
+                } else {
+                    showNotification(result.error || 'Failed to delete domain', 'error');
+                }
+            });
+        }
+
+        // Docker
+        function loadDockerSites() {
+            fetch('/api/docker/installations')
+                .then(res => res.json())
+                .then(sites => {
+                    const grid = document.getElementById('dockerGrid');
+                    if (sites.length === 0) {
+                        grid.innerHTML = '<p>No Docker sites yet. Click "New Docker Site" to create one.</p>';
+                        return;
+                    }
+                    
+                    grid.innerHTML = sites.map(site => `
+                        <div class="domain-card">
+                            <div class="domain-header">
+                                <span class="domain-name">${site.domain}</span>
+                                <span class="domain-type ${site.status}">${site.status}</span>
+                            </div>
+                            <p>Path: ${site.path}</p>
+                            <div class="domain-actions">
+                                <button class="btn btn-primary" onclick="dockerAction('${site.domain}', 'start')">Start</button>
+                                <button class="btn btn-outline" onclick="dockerAction('${site.domain}', 'stop')">Stop</button>
+                                <button class="btn btn-outline" onclick="dockerAction('${site.domain}', 'logs')">Logs</button>
+                                <button class="btn btn-outline" onclick="deleteDockerSite('${site.domain}')">Delete</button>
+                            </div>
+                        </div>
+                    `).join('');
+                });
+        }
+
+        function createDockerSite(event) {
+            event.preventDefault();
+            
+            const data = {
+                domain: document.getElementById('dockerDomain').value,
+                ssl: document.getElementById('dockerSSL').checked
+            };
+            
+            fetch('/api/docker/install', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    showNotification('Docker installation started', 'success');
+                    hideModal('dockerModal');
+                } else {
+                    showNotification(result.error || 'Failed to start installation', 'error');
+                }
+            });
+        }
+
+        function dockerAction(domain, action) {
+            // Implementation for docker actions
+            showNotification(`${action} action for ${domain}`, 'info');
+        }
+
+        function deleteDockerSite(domain) {
+            if (!confirm(`Are you sure you want to delete Docker site ${domain}?`)) return;
+            
+            fetch(`/api/docker/installations/${domain}`, {
+                method: 'DELETE'
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    showNotification(`Docker site ${domain} deleted`, 'success');
+                    loadDockerSites();
+                }
+            });
+        }
+
+        // Backups
+        function loadBackups() {
+            loadBackupJobs();
+            loadBackupHistory();
+        }
+
+        function loadBackupJobs() {
+            fetch('/api/backups/jobs')
+                .then(res => res.json())
+                .then(jobs => {
+                    const tbody = document.getElementById('backupJobsBody');
+                    if (jobs.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No backup jobs</td></tr>';
+                        return;
+                    }
+                    
+                    tbody.innerHTML = jobs.map(job => `
+                        <tr>
+                            <td>${job.name}</td>
+                            <td>${job.schedule}</td>
+                            <td>${job.last_run ? new Date(job.last_run).toLocaleString() : 'Never'}</td>
+                            <td>${job.next_run ? new Date(job.next_run).toLocaleString() : 'Not scheduled'}</td>
+                            <td><span class="status-badge success">${job.status}</span></td>
+                            <td>
+                                <button class="btn btn-outline" onclick="runBackupJob(${job.id})">Run</button>
+                                <button class="btn btn-outline" onclick="deleteBackupJob(${job.id})">Delete</button>
+                            </td>
+                        </tr>
+                    `).join('');
+                });
+        }
+
+        function loadBackupHistory() {
+            fetch('/api/backups/list')
+                .then(res => res.json())
+                .then(backups => {
+                    const cloudBackups = backups.filter(b => b.type === 'cloud');
+                    const tbody = document.getElementById('backupHistoryBody');
+                    
+                    if (cloudBackups.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No backups yet</td></tr>';
+                        return;
+                    }
+                    
+                    tbody.innerHTML = cloudBackups.slice(0, 10).map(backup => `
+                        <tr>
+                            <td>${new Date(backup.start_time).toLocaleString()}</td>
+                            <td>${formatBytes(backup.size)}</td>
+                            <td>${backup.locations ? backup.locations.join(', ') : 'Local'}</td>
+                            <td><span class="status-badge success">${backup.status}</span></td>
+                        </tr>
+                    `).join('');
+                });
+        }
+
+        function createBackup() {
+            fetch('/api/backups/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'full', cloud_backup: true })
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    showNotification('Backup created successfully', 'success');
+                    loadBackups();
+                } else {
+                    showNotification(result.error || 'Backup failed', 'error');
+                }
+            });
+        }
+
+        function createBackupJob(event) {
+            event.preventDefault();
+            
+            const data = {
+                name: document.getElementById('jobName').value,
+                schedule: document.getElementById('jobSchedule').value,
+                retention_days: document.getElementById('jobRetention').value,
+                destination: { provider: document.getElementById('jobDestination').value }
+            };
+            
+            fetch('/api/backups/jobs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    showNotification('Backup job created', 'success');
+                    hideModal('backupJobModal');
+                    loadBackupJobs();
+                }
+            });
+        }
+
+        // Cloud Storage
+        function loadCloudStatus() {
+            fetch('/api/cloud/status')
+                .then(res => res.json())
+                .then(status => {
+                    document.getElementById('s3Status').textContent = 
+                        status.s3?.configured ? '✅ Configured' : '❌ Not Configured';
+                    document.getElementById('gdriveStatus').textContent = 
+                        status.gdrive?.configured ? '✅ Configured' : '❌ Not Configured';
+                    document.getElementById('rcloneStatus').textContent = 
+                        status.rclone?.configured ? '✅ Configured' : '❌ Not Configured';
+                });
+        }
+
+        function configureCloud(provider) {
+            const modal = document.getElementById('cloudConfigModal');
+            const title = document.getElementById('cloudModalTitle');
+            const form = document.getElementById('cloudConfigForm');
+            
+            title.textContent = `Configure ${provider.toUpperCase()}`;
+            
+            if (provider === 's3') {
+                form.innerHTML = `
+                    <form onsubmit="saveCloudConfig('s3', event)">
+                        <div class="form-group">
+                            <label>Access Key ID</label>
+                            <input type="text" id="s3AccessKey" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Secret Access Key</label>
+                            <input type="password" id="s3SecretKey" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Region</label>
+                            <input type="text" id="s3Region" value="us-east-1">
+                        </div>
+                        <div class="form-group">
+                            <label>Bucket Name</label>
+                            <input type="text" id="s3Bucket" required>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="s3Default"> Set as default
+                            </label>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save Configuration</button>
+                    </form>
+                `;
+            } else if (provider === 'gdrive') {
+                form.innerHTML = `
+                    <form onsubmit="saveCloudConfig('gdrive', event)">
+                        <div class="form-group">
+                            <label>Client ID</label>
+                            <input type="text" id="gdriveClientId" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Client Secret</label>
+                            <input type="password" id="gdriveClientSecret" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Refresh Token</label>
+                            <input type="text" id="gdriveRefreshToken" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Folder ID (optional)</label>
+                            <input type="text" id="gdriveFolderId">
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="gdriveDefault"> Set as default
+                            </label>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save Configuration</button>
+                    </form>
+                `;
+            } else if (provider === 'rclone') {
+                form.innerHTML = `
+                    <form onsubmit="saveCloudConfig('rclone', event)">
+                        <div class="form-group">
+                            <label>Remote Name</label>
+                            <input type="text" id="rcloneRemote" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Type</label>
+                            <select id="rcloneType">
+                                <option value="drive">Google Drive</option>
+                                <option value="s3">Amazon S3</option>
+                                <option value="dropbox">Dropbox</option>
+                                <option value="onedrive">OneDrive</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Path</label>
+                            <input type="text" id="rclonePath" value="/easyinstall-backups">
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="rcloneDefault"> Set as default
+                            </label>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save Configuration</button>
+                    </form>
+                `;
+            }
+            
+            showModal('cloudConfigModal');
+        }
+
+        function saveCloudConfig(provider, event) {
+            event.preventDefault();
+            
+            let data = { provider };
+            
+            if (provider === 's3') {
+                data = {
+                    ...data,
+                    access_key: document.getElementById('s3AccessKey').value,
+                    secret_key: document.getElementById('s3SecretKey').value,
+                    region: document.getElementById('s3Region').value,
+                    bucket: document.getElementById('s3Bucket').value,
+                    default: document.getElementById('s3Default').checked
+                };
+            } else if (provider === 'gdrive') {
+                data = {
+                    ...data,
+                    client_id: document.getElementById('gdriveClientId').value,
+                    client_secret: document.getElementById('gdriveClientSecret').value,
+                    refresh_token: document.getElementById('gdriveRefreshToken').value,
+                    folder_id: document.getElementById('gdriveFolderId').value,
+                    default: document.getElementById('gdriveDefault').checked
+                };
+            } else if (provider === 'rclone') {
+                data = {
+                    ...data,
+                    remote: document.getElementById('rcloneRemote').value,
+                    type: document.getElementById('rcloneType').value,
+                    path: document.getElementById('rclonePath').value,
+                    default: document.getElementById('rcloneDefault').checked
+                };
+            }
+            
+            fetch(`/api/cloud/configure/${provider}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    showNotification(`${provider.toUpperCase()} configured successfully`, 'success');
+                    hideModal('cloudConfigModal');
+                    loadCloudStatus();
+                } else {
+                    showNotification(result.error || 'Configuration failed', 'error');
+                }
+            });
+        }
+
+        // Services
+        function loadServices() {
+            const services = ['nginx', 'mariadb', 'redis-server', 'memcached', 'fail2ban'];
+            const tbody = document.getElementById('servicesBody');
+            
+            Promise.all(services.map(service =>
+                fetch(`/api/service/${service}/status`)
+                    .then(res => res.json())
+                    .then(data => ({ service, ...data }))
+            ))
+            .then(results => {
+                tbody.innerHTML = results.map(r => `
+                    <tr>
+                        <td>${r.service}</td>
+                        <td><span class="status-badge ${r.success ? 'success' : 'danger'}">${r.success ? 'Running' : 'Stopped'}</span></td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>
+                            ${!r.success ? `<button class="btn btn-primary" onclick="serviceAction('${r.service}', 'start')">Start</button>` : ''}
+                            <button class="btn btn-outline" onclick="serviceAction('${r.service}', 'restart')">Restart</button>
+                            ${r.success ? `<button class="btn btn-outline" onclick="serviceAction('${r.service}', 'stop')">Stop</button>` : ''}
+                        </td>
+                    </tr>
+                `).join('');
+            });
+        }
+
+        function serviceAction(service, action) {
+            fetch(`/api/service/${service}/${action}`, {
+                method: 'POST'
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    showNotification(`${service} ${action} successful`, 'success');
+                    loadServices();
+                } else {
+                    showNotification(result.error || `Failed to ${action} ${service}`, 'error');
+                }
+            });
+        }
+
+        // Users
+        function loadUsers() {
+            fetch('/api/users')
+                .then(res => res.json())
+                .then(users => {
+                    const tbody = document.getElementById('usersBody');
+                    
+                    tbody.innerHTML = users.map(user => `
+                        <tr>
+                            <td>${user.username}</td>
+                            <td>${user.email || '-'}</td>
+                            <td><span class="status-badge ${user.role === 'admin' ? 'success' : 'warning'}">${user.role}</span></td>
+                            <td>${new Date(user.created_at).toLocaleDateString()}</td>
+                            <td>${user.last_login ? new Date(user.last_login).toLocaleString() : 'Never'}</td>
+                            <td>
+                                ${user.username !== 'admin' ? `
+                                    <button class="btn btn-outline" onclick="deleteUser(${user.id})">Delete</button>
+                                ` : ''}
+                            </td>
+                        </tr>
+                    `).join('');
+                });
+        }
+
+        function createUser(event) {
+            event.preventDefault();
+            
+            const data = {
+                username: document.getElementById('newUsername').value,
+                email: document.getElementById('newEmail').value,
+                password: document.getElementById('newPassword').value,
+                role: document.getElementById('newRole').value
+            };
+            
+            fetch('/api/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    showNotification('User created successfully', 'success');
+                    hideModal('userModal');
+                    loadUsers();
+                } else {
+                    showNotification(result.error || 'Failed to create user', 'error');
+                }
+            });
+        }
+
+        function deleteUser(userId) {
+            if (!confirm('Are you sure you want to delete this user?')) return;
+            
+            fetch(`/api/users/${userId}`, {
+                method: 'DELETE'
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    showNotification('User deleted', 'success');
+                    loadUsers();
+                } else {
+                    showNotification(result.error || 'Failed to delete user', 'error');
+                }
+            });
+        }
+
+        // Logs
+        function loadLogs() {
+            const logType = document.getElementById('logType').value;
+            const logContent = document.getElementById('logContent');
+            
+            logContent.textContent = 'Loading logs...';
+            
+            fetch(`/api/logs/${logType}`)
+                .then(res => res.text())
+                .then(logs => {
+                    logContent.textContent = logs || 'No logs available';
+                })
+                .catch(err => {
+                    logContent.textContent = 'Failed to load logs';
+                });
+        }
+
+        // Settings
+        function saveSettings() {
+            const settings = {
+                backup_retention: document.getElementById('backupRetention').value,
+                backup_schedule: document.getElementById('backupSchedule').value,
+                default_php: document.getElementById('defaultPhp').value,
+                theme_editor: document.getElementById('themeEditor').value
+            };
+            
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(settings)
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    showNotification('Settings saved', 'success');
+                }
+            });
+        }
+
+        // UI Helpers
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('active');
+        }
+
+        function showModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+        }
+
+        function hideModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
+        }
+
+        function formatBytes(bytes, decimals = 2) {
+            if (bytes === 0) return '0 Bytes';
+            
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+
+        function refreshStatus() {
+            loadDashboard();
+            showNotification('Status refreshed', 'success');
+        }
+
+        function logout() {
+            window.location.href = '/logout';
+        }
+
+        // Close modals when clicking outside
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.classList.remove('active');
+            }
+        }
+    </script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</body>
+</html>
